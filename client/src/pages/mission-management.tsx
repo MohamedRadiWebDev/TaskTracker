@@ -22,7 +22,19 @@ const initialMissionData: MissionData = {
 export default function MissionManagement() {
   const { toast } = useToast();
   const [missionData, setMissionData] = useLocalStorage<MissionData>('missionData', initialMissionData);
-  const [expenseCounter, setExpenseCounter] = useState(1);
+  
+  // Initialize counter based on existing expenses to avoid duplicate IDs
+  const getInitialCounter = () => {
+    if (missionData.expenses.length === 0) return 1;
+    const maxId = Math.max(
+      ...missionData.expenses
+        .map(expense => parseInt(expense.id.replace('expense-', '')))
+        .filter(num => !isNaN(num))
+    );
+    return maxId + 1;
+  };
+  
+  const [expenseCounter, setExpenseCounter] = useState(getInitialCounter());
 
   const updateMissionData = (updates: Partial<MissionData>) => {
     setMissionData(prev => ({ ...prev, ...updates }));
