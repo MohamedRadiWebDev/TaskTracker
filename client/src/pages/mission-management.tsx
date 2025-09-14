@@ -263,17 +263,6 @@ export default function MissionManagement() {
       itemCount: activeMission.expenses.length,
       bankCount: uniqueBanks.size,
       bankTotals
-    };ks.forEach(bank => {
-          bankTotals[bank] = (bankTotals[bank] || 0) + amountPerBank;
-        });
-      }
-    });
-
-    return {
-      totalAmount,
-      itemCount: activeMission.expenses.length,
-      bankCount: Object.keys(bankTotals).length,
-      bankTotals
     };
   };
 
