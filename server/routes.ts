@@ -122,6 +122,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Export period report to Excel
+  app.get("/api/missions/period-export", async (req, res) => {
+    try {
+      const { from, to } = req.query;
+      
+      if (!from || !to) {
+        return res.status(400).json({ error: "Both 'from' and 'to' dates are required" });
+      }
+
+      const fromDate = new Date(from as string);
+      const toDate = new Date(to as string);
+      
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        return res.status(400).json({ error: "Invalid date format" });
+      }
+
+      if (fromDate > toDate) {
+        return res.status(400).json({ error: "From date must be before to date" });
+      }
+
+      const filePath = await storage.exportPeriodReport(fromDate.toISOString().split('T')[0], toDate.toISOString().split('T')[0]);
+      const fileName = path.basename(filePath);
+      
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.download(filePath, fileName);
+    } catch (error) {
+      console.error('Period export error:', error);
+      res.status(500).json({ error: "Failed to export period report to Excel" });
+    }
+  });
+
   // Setup multer for file uploads
   const upload = multer({ dest: 'uploads/' });
 

@@ -13,6 +13,7 @@ export interface IStorage {
   updateMission(id: string, mission: Partial<InsertMission>): Promise<Mission | undefined>;
   deleteMission(id: string): Promise<boolean>;
   exportToExcel(): Promise<string>;
+  exportPeriodReport(fromDate: string, toDate: string): Promise<string>;
   importFromExcel(filePath: string): Promise<void>;
 }
 
@@ -524,6 +525,172 @@ export class ExcelStorage implements IStorage {
       );
     }
     colWidths.push({ width: 15 }); // الاجمالى النهائي
+    
+    mainSheet['!cols'] = colWidths;
+
+    XLSX.writeFile(workbook, exportFile);
+    return exportFile;
+  }
+
+  async exportPeriodReport(fromDate: string, toDate: string): Promise<string> {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const exportFile = path.join(this.dataDir, `period-report-${fromDate}-to-${toDate}-${timestamp}.xlsx`);
+    
+    const missions = Array.from(this.missions.values());
+    const employees = Array.from(this.employees.values());
+    
+    // Filter missions by date range
+    const filteredMissions = missions.filter(mission => {
+      if (!mission.missionDate) return false;
+      const missionDate = new Date(mission.missionDate).toISOString().split('T')[0];
+      return missionDate >= fromDate && missionDate <= toDate;
+    });
+
+    // Comprehensive expense type normalization mappings
+    const englishToArabicMapping: { [key: string]: string } = {
+      'transportation': 'انتقالات',
+      'fees': 'رسوم',
+      'tips': 'اكراميات',
+      'office-supplies': 'أدوات مكتبية',
+      'hospitality': 'ضيافة',
+      'transport': 'انتقالات',
+      'tip': 'اكراميات'
+    };
+
+    // Reverse mapping from Arabic to Arabic (for consistency)
+    const arabicToArabicMapping: { [key: string]: string } = {
+      'انتقالات': 'انتقالات',
+      'رسوم': 'رسوم',
+      'اكراميات': 'اكراميات',
+      'إكراميات': 'اكراميات', // Handle different spelling variations
+      'أدوات مكتبية': 'أدوات مكتبية',
+      'ضيافة': 'ضيافة'
+    };
+
+    // Helper function to normalize expense types to Arabic
+    const normalizeExpenseType = (type: string): string => {
+      // First try English to Arabic mapping
+      if (englishToArabicMapping[type]) {
+        return englishToArabicMapping[type];
+      }
+      // Then try Arabic to Arabic mapping (handles variations)
+      if (arabicToArabicMapping[type]) {
+        return arabicToArabicMapping[type];
+      }
+      // Default fallback - return as is
+      return type;
+    };
+
+    // Create employee-bank aggregation map
+    const aggregationMap = new Map<string, {
+      employeeName: string;
+      employeeCode: number;
+      employeeBranch: string;
+      bankName: string;
+      transportation: number;
+      fees: number;
+      tips: number;
+      officeSupplies: number;
+      hospitality: number;
+    }>();
+
+    // Process each mission
+    filteredMissions.forEach(mission => {
+      if (!mission.expenses || mission.expenses.length === 0) return;
+
+      // Process each expense and distribute amounts properly across banks
+      mission.expenses.forEach(expense => {
+        const amount = parseFloat(String(expense.amount || 0)) || 0;
+        const expenseBanks = expense.banks && expense.banks.length > 0 ? expense.banks : ['غير محدد'];
+        const amountPerBank = amount / expenseBanks.length;
+
+        // Normalize expense type to Arabic
+        const normalizedArabicType = normalizeExpenseType(expense.type);
+        
+        // Add the divided amount to each bank's aggregation
+        expenseBanks.forEach(bankName => {
+          const key = `${mission.employeeCode}-${bankName}`;
+          
+          if (!aggregationMap.has(key)) {
+            aggregationMap.set(key, {
+              employeeName: mission.employeeName,
+              employeeCode: mission.employeeCode,
+              employeeBranch: mission.employeeBranch,
+              bankName: bankName,
+              transportation: 0,
+              fees: 0,
+              tips: 0,
+              officeSupplies: 0,
+              hospitality: 0
+            });
+          }
+
+          const aggregation = aggregationMap.get(key)!;
+
+          // Add the properly divided amount to the appropriate category
+          switch (normalizedArabicType) {
+            case 'انتقالات':
+              aggregation.transportation += amountPerBank;
+              break;
+            case 'رسوم':
+              aggregation.fees += amountPerBank;
+              break;
+            case 'اكراميات':
+              aggregation.tips += amountPerBank;
+              break;
+            case 'أدوات مكتبية':
+              aggregation.officeSupplies += amountPerBank;
+              break;
+            case 'ضيافة':
+              aggregation.hospitality += amountPerBank;
+              break;
+          }
+        });
+      });
+    });
+
+    // Convert aggregation map to export data
+    const exportData: any[] = [];
+    aggregationMap.forEach(aggregation => {
+      exportData.push({
+        'اسم الموظف': aggregation.employeeName,
+        'الكود': aggregation.employeeCode,
+        'فرع': aggregation.employeeBranch,
+        'بنك / الشركة': aggregation.bankName,
+        'انتقالات': Number(aggregation.transportation.toFixed(2)),
+        'رسوم': Number(aggregation.fees.toFixed(2)),
+        'اكراميات': Number(aggregation.tips.toFixed(2)),
+        'أدوات مكتبية': Number(aggregation.officeSupplies.toFixed(2)),
+        'ضيافة': Number(aggregation.hospitality.toFixed(2))
+      });
+    });
+
+    // Sort by employee code, then by bank name
+    exportData.sort((a, b) => {
+      if (a['الكود'] !== b['الكود']) {
+        return a['الكود'] - b['الكود'];
+      }
+      return a['بنك / الشركة'].localeCompare(b['بنك / الشركة'], 'ar');
+    });
+
+    const workbook = XLSX.utils.book_new();
+    
+    // Create and add the main sheet
+    const mainSheet = XLSX.utils.json_to_sheet(exportData);
+    XLSX.utils.book_append_sheet(workbook, mainSheet, 'تقرير الفترة');
+    
+    // Set column widths for better readability
+    const colWidths: any[] = [
+      { width: 25 }, // اسم الموظف
+      { width: 10 }, // الكود
+      { width: 20 }, // فرع
+      { width: 20 }, // بنك / الشركة
+      { width: 12 }, // انتقالات
+      { width: 12 }, // رسوم
+      { width: 12 }, // اكراميات
+      { width: 15 }, // أدوات مكتبية
+      { width: 12 }  // ضيافة
+    ];
     
     mainSheet['!cols'] = colWidths;
 

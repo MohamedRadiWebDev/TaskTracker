@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -16,10 +17,11 @@ interface Totals {
   bankCount: number;
   bankTotals: Record<string, number>;
 }
-import { Briefcase, Save, Trash2, Plus, Edit2, Download, Upload, Loader2 } from "lucide-react";
+import { Briefcase, Save, Trash2, Plus, Edit2, Download, Upload, Loader2, FileText } from "lucide-react";
 
 export default function MissionManagement() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [activeMissionId, setActiveMissionId] = useState<string | null>(null);
   const [expenseCounter, setExpenseCounter] = useState(1);
   const [localStatement, setLocalStatement] = useState<string>("");
@@ -430,6 +432,16 @@ export default function MissionManagement() {
         </div>
 
         <div className="flex gap-3">
+          <Button
+            onClick={() => setLocation("/period-report")}
+            variant="outline"
+            className="bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
+            data-testid="button-period-report"
+          >
+            <FileText className="w-4 h-4 ml-2" />
+            تقرير الفترة
+          </Button>
+
           <Button
             onClick={exportToExcel}
             variant="outline"
