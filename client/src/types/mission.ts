@@ -6,6 +6,8 @@ export interface ExpenseItem {
 }
 
 export interface MissionData {
+  id: string;
+  title: string;
   employee: {
     code: number;
     name: string;
@@ -15,6 +17,12 @@ export interface MissionData {
   statement: string;
   expenses: ExpenseItem[];
   timestamp: string;
+  createdAt: string;
+}
+
+export interface MissionsCollection {
+  missions: MissionData[];
+  activeMissionId: string | null;
 }
 
 export const expenseTypes = {

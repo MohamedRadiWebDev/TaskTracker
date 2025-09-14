@@ -7,57 +7,166 @@ import EmployeeLookup from "@/components/employee-lookup";
 import MissionDetails from "@/components/mission-details";
 import ExpenseManagement from "@/components/expense-management";
 import BankDistribution from "@/components/bank-distribution";
-import type { MissionData, ExpenseItem } from "@/types/mission";
-import { Briefcase, Save, Trash2 } from "lucide-react";
+import type { MissionData, ExpenseItem, MissionsCollection } from "@/types/mission";
+import { Briefcase, Save, Trash2, Plus, Edit2 } from "lucide-react";
 
-const initialMissionData: MissionData = {
+const createNewMission = (): MissionData => ({
+  id: `mission-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  title: `مأمورية ${new Date().toLocaleDateString('ar-EG')}`,
   employee: null,
   missionDate: new Date().toISOString().split('T')[0],
   statement: '',
   expenses: [],
-  timestamp: ''
+  timestamp: '',
+  createdAt: new Date().toISOString()
+});
+
+const initialMissionsCollection: MissionsCollection = {
+  missions: [createNewMission()],
+  activeMissionId: null
 };
 
 export default function MissionManagement() {
   const { toast } = useToast();
-  const [missionData, setMissionData] = useLocalStorage<MissionData>('missionData', initialMissionData);
   
-  // Migration function to convert old data structure to new one
-  const migrateMissionData = (data: any): MissionData => {
-    if (!data) return initialMissionData;
+  // Initialize missions collection with migration from old data
+  const initializeMissionsCollection = (): MissionsCollection => {
+    const oldMissionData = localStorage.getItem('missionData');
+    if (oldMissionData) {
+      try {
+        const parsed = JSON.parse(oldMissionData);
+        // Migrate old single mission to new format
+        const migratedMission: MissionData = {
+          id: `mission-${Date.now()}`,
+          title: `مأمورية مُرحلة`,
+          ...parsed,
+          createdAt: parsed.timestamp || new Date().toISOString()
+        };
+        
+        // Migrate expense structure if needed
+        if (migratedMission.expenses) {
+          migratedMission.expenses = migratedMission.expenses.map((expense: any) => ({
+            ...expense,
+            banks: expense.banks || (expense.bank ? [expense.bank] : [])
+          }));
+        }
+        
+        const collection: MissionsCollection = {
+          missions: [migratedMission],
+          activeMissionId: migratedMission.id
+        };
+        
+        // Clear old data
+        localStorage.removeItem('missionData');
+        return collection;
+      } catch (error) {
+        console.error('Migration failed:', error);
+      }
+    }
     
-    const migratedExpenses = data.expenses?.map((expense: any) => ({
-      ...expense,
-      banks: expense.banks || (expense.bank ? [expense.bank] : [])
-    })) || [];
-    
-    // Remove bank field from mission data
-    const { bank, ...restData } = data;
-    
+    // Create new collection
+    const newMission = createNewMission();
     return {
-      ...initialMissionData,
-      ...restData,
-      expenses: migratedExpenses
+      missions: [newMission],
+      activeMissionId: newMission.id
     };
   };
   
-  // Apply migration if needed
+  const [missionsCollection, setMissionsCollection] = useLocalStorage<MissionsCollection>(
+    'missionsCollection', 
+    initializeMissionsCollection()
+  );
+  
+  // Get current active mission
+  const activeMission = missionsCollection.missions.find(m => m.id === missionsCollection.activeMissionId) || missionsCollection.missions[0];
+  
+  // Set first mission as active if none selected
   useEffect(() => {
-    const needsMigration = missionData.expenses.some((expense: any) => 
-      expense.bank !== undefined || expense.banks === undefined
-    );
-    
-    if (needsMigration) {
-      const migratedData = migrateMissionData(missionData);
-      setMissionData(migratedData);
+    if (!missionsCollection.activeMissionId && missionsCollection.missions.length > 0) {
+      setMissionsCollection(prev => ({
+        ...prev,
+        activeMissionId: prev.missions[0].id
+      }));
     }
-  }, []);
+  }, [missionsCollection.activeMissionId, missionsCollection.missions.length, setMissionsCollection]);
+  
+  // Mission management functions
+  const updateActiveMission = (updates: Partial<MissionData>) => {
+    setMissionsCollection(prev => ({
+      ...prev,
+      missions: prev.missions.map(mission =>
+        mission.id === prev.activeMissionId 
+          ? { ...mission, ...updates, timestamp: new Date().toISOString() }
+          : mission
+      )
+    }));
+  };
+  
+  const createNewMissionAction = () => {
+    const newMission = createNewMission();
+    setMissionsCollection(prev => ({
+      missions: [...prev.missions, newMission],
+      activeMissionId: newMission.id
+    }));
+    
+    toast({
+      title: "تم إنشاء مأمورية جديدة",
+      description: "يمكنك الآن إدخال بيانات المأمورية الجديدة",
+    });
+  };
+  
+  const selectMission = (missionId: string) => {
+    setMissionsCollection(prev => ({
+      ...prev,
+      activeMissionId: missionId
+    }));
+  };
+  
+  const deleteMission = (missionId: string) => {
+    if (missionsCollection.missions.length <= 1) {
+      toast({
+        title: "لا يمكن الحذف",
+        description: "يجب أن تبقى مأمورية واحدة على الأقل",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (window.confirm('هل أنت متأكد من حذف هذه المأمورية؟')) {
+      setMissionsCollection(prev => {
+        const filteredMissions = prev.missions.filter(m => m.id !== missionId);
+        const newActiveMissionId = prev.activeMissionId === missionId 
+          ? filteredMissions[0]?.id || null
+          : prev.activeMissionId;
+        
+        return {
+          missions: filteredMissions,
+          activeMissionId: newActiveMissionId
+        };
+      });
+      
+      toast({
+        title: "تم حذف المأمورية",
+        description: "تم حذف المأمورية بنجاح",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const updateMissionTitle = (missionId: string, title: string) => {
+    setMissionsCollection(prev => ({
+      ...prev,
+      missions: prev.missions.map(mission =>
+        mission.id === missionId ? { ...mission, title } : mission
+      )
+    }));
+  };
   
   // Initialize counter based on existing expenses to avoid duplicate IDs
   const getInitialCounter = () => {
-    if (missionData.expenses.length === 0) return 1;
+    if (!activeMission || activeMission.expenses.length === 0) return 1;
     const maxId = Math.max(
-      ...missionData.expenses
+      ...activeMission.expenses
         .map(expense => parseInt(expense.id.replace('expense-', '')))
         .filter(num => !isNaN(num))
     );
@@ -65,10 +174,6 @@ export default function MissionManagement() {
   };
   
   const [expenseCounter, setExpenseCounter] = useState(getInitialCounter());
-
-  const updateMissionData = (updates: Partial<MissionData>) => {
-    setMissionData(prev => ({ ...prev, ...updates }));
-  };
 
   const addExpenseItem = (type: string) => {
     const newExpense: ExpenseItem = {
@@ -78,56 +183,65 @@ export default function MissionManagement() {
       banks: []
     };
     
-    updateMissionData({
-      expenses: [...missionData.expenses, newExpense]
+    updateActiveMission({
+      expenses: [...(activeMission?.expenses || []), newExpense]
     });
     
     setExpenseCounter(prev => prev + 1);
   };
 
   const updateExpenseItem = (id: string, updates: Partial<ExpenseItem>) => {
-    const updatedExpenses = missionData.expenses.map(expense =>
+    const updatedExpenses = (activeMission?.expenses || []).map(expense =>
       expense.id === id ? { ...expense, ...updates } : expense
     );
-    updateMissionData({ expenses: updatedExpenses });
+    updateActiveMission({ expenses: updatedExpenses });
   };
 
   const removeExpenseItem = (id: string) => {
-    const updatedExpenses = missionData.expenses.filter(expense => expense.id !== id);
-    updateMissionData({ expenses: updatedExpenses });
+    const updatedExpenses = (activeMission?.expenses || []).filter(expense => expense.id !== id);
+    updateActiveMission({ expenses: updatedExpenses });
   };
 
-  const saveData = () => {
-    const dataToSave = {
-      ...missionData,
-      timestamp: new Date().toISOString()
-    };
-    setMissionData(dataToSave);
+  const saveAllMissions = () => {
+    updateActiveMission({ timestamp: new Date().toISOString() });
     
     toast({
       title: "تم حفظ البيانات بنجاح",
-      description: "تم حفظ جميع بيانات المأمورية في التخزين المحلي",
+      description: "تم حفظ جميع بيانات المأموريات في التخزين المحلي",
     });
   };
 
   const clearAllData = () => {
-    if (window.confirm('هل أنت متأكد من حذف جميع البيانات؟')) {
-      setMissionData(initialMissionData);
+    if (window.confirm('هل أنت متأكد من حذف جميع المأموريات؟')) {
+      const newMission = createNewMission();
+      setMissionsCollection({
+        missions: [newMission],
+        activeMissionId: newMission.id
+      });
       setExpenseCounter(1);
       
       toast({
         title: "تم مسح البيانات",
-        description: "تم حذف جميع البيانات المحفوظة",
+        description: "تم حذف جميع المأموريات وإنشاء مأمورية جديدة",
         variant: "destructive"
       });
     }
   };
 
   const calculateTotals = () => {
-    const totalAmount = missionData.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    if (!activeMission) {
+      return {
+        totalAmount: 0,
+        itemCount: 0,
+        bankCount: 0,
+        bankTotals: {}
+      };
+    }
+    
+    const totalAmount = activeMission.expenses.reduce((sum, expense) => sum + expense.amount, 0);
     const bankTotals: Record<string, number> = {};
     
-    missionData.expenses.forEach(expense => {
+    activeMission.expenses.forEach(expense => {
       if (expense.banks && expense.banks.length > 0 && expense.amount > 0) {
         // Divide the expense amount equally among selected banks
         const amountPerBank = expense.amount / expense.banks.length;
@@ -139,7 +253,7 @@ export default function MissionManagement() {
 
     return {
       totalAmount,
-      itemCount: missionData.expenses.length,
+      itemCount: activeMission.expenses.length,
       bankCount: Object.keys(bankTotals).length,
       bankTotals
     };
@@ -164,6 +278,14 @@ export default function MissionManagement() {
             </div>
             <div className="flex items-center gap-4">
               <Button 
+                onClick={createNewMissionAction}
+                variant="outline"
+                data-testid="button-new-mission"
+              >
+                <Plus className="w-4 h-4 ml-2" />
+                مأمورية جديدة
+              </Button>
+              <Button 
                 variant="destructive" 
                 onClick={clearAllData}
                 data-testid="button-clear-all"
@@ -172,7 +294,7 @@ export default function MissionManagement() {
                 مسح الكل
               </Button>
               <Button 
-                onClick={saveData}
+                onClick={saveAllMissions}
                 data-testid="button-save"
               >
                 <Save className="w-4 h-4 ml-2" />
@@ -183,29 +305,65 @@ export default function MissionManagement() {
         </div>
       </header>
 
+      {/* Missions Tabs */}
+      {missionsCollection.missions.length > 1 && (
+        <div className="bg-muted/30 border-b border-border">
+          <div className="container mx-auto px-4 py-4 max-w-6xl">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <span className="text-sm font-medium text-muted-foreground whitespace-nowrap ml-4">المأموريات:</span>
+              {missionsCollection.missions.map((mission) => (
+                <div key={mission.id} className="flex items-center gap-1">
+                  <Button
+                    variant={mission.id === missionsCollection.activeMissionId ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => selectMission(mission.id)}
+                    className="whitespace-nowrap"
+                    data-testid={`tab-mission-${mission.id}`}
+                  >
+                    <Edit2 className="w-3 h-3 ml-1" />
+                    {mission.title}
+                  </Button>
+                  {missionsCollection.missions.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteMission(mission.id)}
+                      className="text-destructive hover:text-destructive w-6 h-6 p-0"
+                      data-testid={`delete-mission-${mission.id}`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Employee Information */}
         <Card className="p-6 mb-8">
           <EmployeeLookup 
-            employee={missionData.employee}
-            onEmployeeChange={(employee: { code: number; name: string; branch: string } | null) => updateMissionData({ employee })}
+            employee={activeMission?.employee || null}
+            onEmployeeChange={(employee: { code: number; name: string; branch: string } | null) => updateActiveMission({ employee })}
           />
         </Card>
 
         {/* Mission Details */}
         <Card className="p-6 mb-8">
           <MissionDetails 
-            missionDate={missionData.missionDate}
-            statement={missionData.statement}
-            onMissionDateChange={(missionDate: string) => updateMissionData({ missionDate })}
-            onStatementChange={(statement: string) => updateMissionData({ statement })}
+            missionDate={activeMission?.missionDate || ''}
+            statement={activeMission?.statement || ''}
+            onMissionDateChange={(missionDate: string) => updateActiveMission({ missionDate })}
+            onStatementChange={(statement: string) => updateActiveMission({ statement })}
           />
         </Card>
 
         {/* Expense Management */}
         <Card className="p-6 mb-8">
           <ExpenseManagement 
-            expenses={missionData.expenses}
+            expenses={activeMission?.expenses || []}
             totals={totals}
             onAddExpense={addExpenseItem}
             onUpdateExpense={updateExpenseItem}
