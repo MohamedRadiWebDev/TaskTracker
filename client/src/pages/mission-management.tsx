@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,8 @@ export default function MissionManagement() {
   const { toast } = useToast();
   const [activeMissionId, setActiveMissionId] = useState<string | null>(null);
   const [expenseCounter, setExpenseCounter] = useState(1);
+  const [localStatement, setLocalStatement] = useState<string>("");
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch all missions from server
   const { data: missions = [], isLoading, error } = useQuery<Mission[], Error>({
@@ -38,6 +40,13 @@ export default function MissionManagement() {
       setActiveMissionId(missions[0].id);
     }
   }, [activeMissionId, missions]);
+
+  // Update local statement when active mission changes
+  useEffect(() => {
+    if (activeMission) {
+      setLocalStatement(activeMission.statement || "");
+    }
+  }, [activeMission?.id]);
 
   // Initialize expense counter based on active mission
   useEffect(() => {
@@ -135,7 +144,8 @@ export default function MissionManagement() {
     if (!activeMission) return;
 
     // Calculate total amount from expenses
-    const totalAmount = (updates.expenses || activeMission.expenses || [])
+    const expenses = (updates.expenses || activeMission.expenses || []) as ExpenseItem[];
+    const totalAmount = expenses
       .reduce((sum: number, expense: ExpenseItem) => sum + expense.amount, 0)
       .toString();
 
@@ -206,14 +216,35 @@ export default function MissionManagement() {
     }
   }, [updateActiveMission]);
 
-  // Mission details change handlers
-  const handleMissionDateChange = useCallback((date: string) => {
-    updateActiveMission({ missionDate: date });
+  // Debounced update function (must be declared before use)
+  const debouncedUpdateMission = useCallback((updates: Partial<InsertMission>) => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    debounceTimeoutRef.current = setTimeout(() => {
+      updateActiveMission(updates);
+    }, 500); // Wait 500ms after user stops typing
   }, [updateActiveMission]);
 
+  // Mission details change handlers
+  const handleMissionDateChange = useCallback((date: string) => {
+    debouncedUpdateMission({ missionDate: date });
+  }, [debouncedUpdateMission]);
+
   const handleStatementChange = useCallback((statement: string) => {
-    updateActiveMission({ statement });
-  }, [updateActiveMission]);
+    setLocalStatement(statement); // Update UI immediately
+    debouncedUpdateMission({ statement }); // Save after delay
+  }, [debouncedUpdateMission]);
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Expense management functions
   const addExpenseItem = useCallback((type: string) => {
@@ -237,8 +268,8 @@ export default function MissionManagement() {
     const updatedExpenses = currentExpenses.map((expense: ExpenseItem) =>
       expense.id === id ? { ...expense, ...updates } : expense
     );
-    updateActiveMission({ expenses: updatedExpenses });
-  }, [activeMission?.expenses, updateActiveMission]);
+    debouncedUpdateMission({ expenses: updatedExpenses });
+  }, [activeMission?.expenses, debouncedUpdateMission]);
 
   const removeExpenseItem = useCallback((id: string) => {
     const currentExpenses: ExpenseItem[] = activeMission?.expenses || [];
@@ -506,7 +537,7 @@ export default function MissionManagement() {
             <Card className="p-6 bg-background border shadow-sm">
               <MissionDetails
                 missionDate={activeMission.missionDate}
-                statement={activeMission.statement || ''}
+                statement={localStatement}
                 onMissionDateChange={handleMissionDateChange}
                 onStatementChange={handleStatementChange}
               />
