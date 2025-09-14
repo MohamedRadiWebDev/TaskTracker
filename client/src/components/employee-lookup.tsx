@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UserCircle, AlertCircle, Loader2 } from "lucide-react";
+import { useEmployees } from "@/hooks/use-missions";
 import type { Employee } from "@shared/schema";
 
 interface EmployeeLookupProps {
@@ -13,26 +13,40 @@ interface EmployeeLookupProps {
 
 export default function EmployeeLookup({ employee, onEmployeeChange }: EmployeeLookupProps) {
   const [employeeCode, setEmployeeCode] = useState(employee?.code?.toString() || '');
-  const [shouldFetch, setShouldFetch] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchedEmployee, setFetchedEmployee] = useState<Employee | null>(null);
+  
+  const { findEmployeeByCode } = useEmployees();
 
-  const { data: fetchedEmployee, isLoading, error } = useQuery({
-    queryKey: ['/api/employees', employeeCode],
-    enabled: shouldFetch && !!employeeCode && !isNaN(parseInt(employeeCode)),
-    retry: false,
-  });
-
-  const handleCodeChange = (value: string) => {
+  const handleCodeChange = async (value: string) => {
     setEmployeeCode(value);
+    setError(null);
     
     if (!value) {
       onEmployeeChange(null);
-      setShouldFetch(false);
+      setFetchedEmployee(null);
       return;
     }
 
     const code = parseInt(value);
     if (!isNaN(code)) {
-      setShouldFetch(true);
+      setIsLoading(true);
+      try {
+        const foundEmployee = findEmployeeByCode(code);
+        if (foundEmployee) {
+          setFetchedEmployee(foundEmployee);
+          setError(null);
+        } else {
+          setFetchedEmployee(null);
+          setError('Employee not found');
+        }
+      } catch (err) {
+        setError('Error looking up employee');
+        setFetchedEmployee(null);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 

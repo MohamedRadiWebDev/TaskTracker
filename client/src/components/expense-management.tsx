@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,9 +14,18 @@ import {
   Trash2,
   Banknote
 } from "lucide-react";
-import type { ExpenseItem } from "@/types/mission";
-import { expenseTypes } from "@/types/mission";
+import { useBanks } from "@/hooks/use-missions";
+import type { ExpenseItem } from "@shared/schema";
 import type { Bank } from "@shared/schema";
+
+// Define expense types locally since we're removing the types file
+const expenseTypes = {
+  'transportation': 'مواصلات',
+  'fees': 'رسوم',
+  'tips': 'إكراميات',  
+  'office-supplies': 'أدوات مكتبية',
+  'hospitality': 'ضيافة'
+};
 
 interface ExpenseManagementProps {
   expenses: ExpenseItem[];
@@ -47,9 +55,7 @@ export default function ExpenseManagement({
   onUpdateExpense,
   onRemoveExpense
 }: ExpenseManagementProps) {
-  const { data: banks = [] } = useQuery<Bank[]>({
-    queryKey: ['/api/banks'],
-  });
+  const { banks } = useBanks();
 
   return (
     <div>

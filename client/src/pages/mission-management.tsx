@@ -3,13 +3,12 @@ import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import EmployeeLookup from "@/components/employee-lookup";
 import MissionDetails from "@/components/mission-details";
 import ExpenseManagement from "@/components/expense-management";
 import BankDistribution from "@/components/bank-distribution";
-import type { Mission, ExpenseItem, InsertMission, Employee } from "@/types/mission";
+import { useMissions } from "@/hooks/use-missions";
+import type { Mission, ExpenseItem, InsertMission, Employee } from "@shared/schema";
 
 interface Totals {
   totalAmount: number;
@@ -29,11 +28,8 @@ export default function MissionManagement() {
   const [localExpenses, setLocalExpenses] = useState<ExpenseItem[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
-  // Fetch all missions from server
-  const { data: missions = [], isLoading, error } = useQuery<Mission[], Error>({
-    queryKey: ['/api/missions'],
-    retry: false,
-  });
+  // Use localStorage missions instead of API
+  const { missions, isLoading, error, createNewMission, updateMissionById, deleteMissionById, refreshMissions } = useMissions();
 
   // Get current active mission
   const activeMission = missions.find((m: Mission) => m.id === activeMissionId) || missions[0];
@@ -68,86 +64,35 @@ export default function MissionManagement() {
     }
   }, [localExpenses]);
 
-  // Create mission mutation
-  const createMissionMutation = useMutation({
-    mutationFn: async (missionData: InsertMission) => {
-      const response = await apiRequest('POST', '/api/missions', missionData);
-      return response.json();
-    },
-    onSuccess: (newMission: Mission) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/missions'] });
-      setActiveMissionId(newMission.id);
-      toast({
-        title: "تم إنشاء مأمورية جديدة",
-        description: "تم حفظ المأمورية في النظام بنجاح",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "خطأ في إنشاء المأمورية",
-        description: "حدث خطأ أثناء إنشاء المأمورية الجديدة",
-        variant: "destructive"
-      });
-    }
-  });
-
-  // Update mission mutation
-  const updateMissionMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<InsertMission> }) => {
-      const response = await apiRequest('PUT', `/api/missions/${id}`, updates);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/missions'] });
-      // تم إزالة إشعار "تم حفظ التغييرات" لتحسين تجربة الاستخدام
-    },
-    onError: (error) => {
-      toast({
-        title: "خطأ في الحفظ",
-        description: "حدث خطأ أثناء حفظ التغييرات",
-        variant: "destructive"
-      });
-    }
-  });
-
-  // Delete mission mutation
-  const deleteMissionMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest('DELETE', `/api/missions/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/missions'] });
-      toast({
-        title: "تم حذف المأمورية",
-        description: "تم حذف المأمورية بنجاح",
-        variant: "destructive"
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "خطأ في الحذف",
-        description: "حدث خطأ أثناء حذف المأمورية",
-        variant: "destructive"
-      });
-    }
-  });
+  // Loading states for async operations
+  const [createLoading, setCreateLoading] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Mission management functions
-  const createNewMissionAction = () => {
-    const newMissionData: InsertMission = {
-      employeeCode: 0,
-      employeeName: '',
-      employeeBranch: '',
-      missionDate: new Date().toISOString().split('T')[0],
-      statement: '',
-      expenses: [],
-      totalAmount: '0'
-    };
+  const createNewMissionAction = async () => {
+    setCreateLoading(true);
+    try {
+      const newMissionData: InsertMission = {
+        employeeCode: 0,
+        employeeName: '',
+        employeeBranch: '',
+        missionDate: new Date().toISOString().split('T')[0],
+        statement: '',
+        expenses: [],
+        totalAmount: '0'
+      };
 
-    createMissionMutation.mutate(newMissionData);
+      const newMission = await createNewMission(newMissionData);
+      setActiveMissionId(newMission.id);
+    } catch (error) {
+      console.error('Error creating mission:', error);
+    } finally {
+      setCreateLoading(false);
+    }
   };
 
-  const updateActiveMission = useCallback((updates: Partial<InsertMission>) => {
+  const updateActiveMission = useCallback(async (updates: Partial<InsertMission>) => {
     if (!activeMission) return;
 
     // Calculate total amount from expenses
@@ -173,17 +118,21 @@ export default function MissionManagement() {
 
     if (!hasChanges) return;
 
-    updateMissionMutation.mutate({
-      id: activeMission.id,
-      updates: updatedData
-    });
-  }, [activeMission, updateMissionMutation]);
+    setUpdateLoading(true);
+    try {
+      await updateMissionById(activeMission.id, updatedData);
+    } catch (error) {
+      console.error('Error updating mission:', error);
+    } finally {
+      setUpdateLoading(false);
+    }
+  }, [activeMission, updateMissionById]);
 
   const selectMission = (missionId: string) => {
     setActiveMissionId(missionId);
   };
 
-  const deleteMission = (missionId: string) => {
+  const deleteMission = async (missionId: string) => {
     if (missions.length <= 1) {
       toast({
         title: "لا يمكن الحذف",
@@ -194,14 +143,21 @@ export default function MissionManagement() {
     }
 
     if (window.confirm('هل أنت متأكد من حذف هذه المأمورية؟')) {
-      deleteMissionMutation.mutate(missionId);
-      
-      // Set new active mission if deleting current one
-      if (activeMissionId === missionId) {
-        const remainingMissions = missions.filter((m: Mission) => m.id !== missionId);
-        if (remainingMissions.length > 0) {
-          setActiveMissionId(remainingMissions[0].id);
+      setDeleteLoading(true);
+      try {
+        await deleteMissionById(missionId);
+        
+        // Set new active mission if deleting current one
+        if (activeMissionId === missionId) {
+          const remainingMissions = missions.filter((m: Mission) => m.id !== missionId);
+          if (remainingMissions.length > 0) {
+            setActiveMissionId(remainingMissions[0].id);
+          }
         }
+      } catch (error) {
+        console.error('Error deleting mission:', error);
+      } finally {
+        setDeleteLoading(false);
       }
     }
   };
@@ -326,7 +282,7 @@ export default function MissionManagement() {
         return response.json();
       })
       .then(() => {
-        queryClient.invalidateQueries({ queryKey: ['/api/missions'] });
+        refreshMissions();
         toast({
           title: "تم استيراد البيانات بنجاح",
           description: "تم استيراد المأموريات من ملف Excel",
@@ -405,7 +361,7 @@ export default function MissionManagement() {
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <div className="text-destructive text-lg mb-4">خطأ في تحميل البيانات</div>
-            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/missions'] })}>
+            <Button onClick={() => refreshMissions()}>
               إعادة المحاولة
             </Button>
           </div>
@@ -471,10 +427,10 @@ export default function MissionManagement() {
 
           <Button
             onClick={createNewMissionAction}
-            disabled={createMissionMutation.isPending}
+            disabled={createLoading}
             data-testid="button-new-mission"
           >
-            {createMissionMutation.isPending ? (
+            {createLoading ? (
               <Loader2 className="w-4 h-4 ml-2 animate-spin" />
             ) : (
               <Plus className="w-4 h-4 ml-2" />
@@ -508,7 +464,7 @@ export default function MissionManagement() {
                     size="sm"
                     onClick={() => deleteMission(mission.id)}
                     className="h-8 w-8 p-0 hover:bg-destructive/20"
-                    disabled={deleteMissionMutation.isPending}
+                    disabled={deleteLoading}
                     data-testid={`button-delete-${mission.id}`}
                   >
                     <Trash2 className="w-3 h-3" />
@@ -578,10 +534,10 @@ export default function MissionManagement() {
                       onClick={saveChanges}
                       variant="default"
                       className="w-full flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
-                      disabled={updateMissionMutation.isPending}
+                      disabled={updateLoading}
                     >
                       <Save className="w-4 h-4" />
-                      {updateMissionMutation.isPending ? 'جاري الحفظ...' : 'حفظ جميع التغييرات'}
+                      {updateLoading ? 'جاري الحفظ...' : 'حفظ جميع التغييرات'}
                     </Button>
                   </div>
                 ) : (
