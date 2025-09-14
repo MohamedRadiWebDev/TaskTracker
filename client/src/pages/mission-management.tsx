@@ -9,6 +9,13 @@ import MissionDetails from "@/components/mission-details";
 import ExpenseManagement from "@/components/expense-management";
 import BankDistribution from "@/components/bank-distribution";
 import type { Mission, ExpenseItem, InsertMission, Employee } from "@/types/mission";
+
+interface Totals {
+  totalAmount: number;
+  itemCount: number;
+  bankCount: number;
+  bankTotals: Record<string, number>;
+}
 import { Briefcase, Save, Trash2, Plus, Edit2, Download, Upload, Loader2 } from "lucide-react";
 
 export default function MissionManagement() {
@@ -17,7 +24,7 @@ export default function MissionManagement() {
   const [expenseCounter, setExpenseCounter] = useState(1);
 
   // Fetch all missions from server
-  const { data: missions = [], isLoading, error } = useQuery({
+  const { data: missions = [], isLoading, error } = useQuery<Mission[], Error>({
     queryKey: ['/api/missions'],
     retry: false,
   });
@@ -300,7 +307,7 @@ export default function MissionManagement() {
   };
 
   // Calculate totals
-  const calculateTotals = () => {
+  const calculateTotals = (): Totals => {
     if (!activeMission) {
       return {
         totalAmount: 0,
@@ -310,23 +317,23 @@ export default function MissionManagement() {
       };
     }
 
-    const expenses = activeMission.expenses || [];
-    const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const expenses: ExpenseItem[] = activeMission.expenses || [];
+    const totalAmount = expenses.reduce((sum: number, expense: ExpenseItem) => sum + expense.amount, 0);
     const bankTotals: Record<string, number> = {};
 
-    expenses.forEach(expense => {
+    expenses.forEach((expense: ExpenseItem) => {
       if (expense.banks && expense.banks.length > 0 && expense.amount > 0) {
         const amountPerBank = expense.amount / expense.banks.length;
-        expense.banks.forEach(bankName => {
+        expense.banks.forEach((bankName: string) => {
           bankTotals[bankName] = (bankTotals[bankName] || 0) + amountPerBank;
         });
       }
     });
 
     const uniqueBanks = new Set<string>();
-    expenses.forEach(expense => {
+    expenses.forEach((expense: ExpenseItem) => {
       if (expense.banks) {
-        expense.banks.forEach(bank => uniqueBanks.add(bank));
+        expense.banks.forEach((bank: string) => uniqueBanks.add(bank));
       }
     });
 
@@ -502,6 +509,7 @@ export default function MissionManagement() {
             <Card className="p-6 bg-background border shadow-sm">
               <ExpenseManagement
                 expenses={activeMission.expenses || []}
+                totals={totals}
                 onAddExpense={addExpenseItem}
                 onUpdateExpense={updateExpenseItem}
                 onRemoveExpense={removeExpenseItem}
@@ -512,8 +520,8 @@ export default function MissionManagement() {
           {/* Right column - Summary */}
           <div className="space-y-6">
             <BankDistribution
-              expenses={activeMission.expenses || []}
-              totals={totals}
+              bankTotals={totals.bankTotals}
+              totalAmount={totals.totalAmount}
             />
 
             {/* Save Actions */}

@@ -1,6 +1,6 @@
 import { type Employee, type Bank, type Mission, type InsertMission, type ExpenseItem } from "@shared/schema";
 import { randomUUID } from "crypto";
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -222,7 +222,7 @@ export class ExcelStorage implements IStorage {
       missionDate: insertMission.missionDate,
       bank: insertMission.bank || null,
       statement: insertMission.statement || null,
-      expenses: insertMission.expenses || [],
+      expenses: (insertMission.expenses as ExpenseItem[]) || [],
       totalAmount: insertMission.totalAmount || "0",
       createdAt: new Date()
     };
@@ -238,7 +238,7 @@ export class ExcelStorage implements IStorage {
     const updatedMission: Mission = {
       ...mission,
       ...updates,
-      expenses: updates.expenses || mission.expenses,
+      expenses: (updates.expenses as ExpenseItem[]) || mission.expenses,
       totalAmount: updates.totalAmount || mission.totalAmount,
       bank: updates.bank !== undefined ? updates.bank : mission.bank,
       statement: updates.statement !== undefined ? updates.statement : mission.statement

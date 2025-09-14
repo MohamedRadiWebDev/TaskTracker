@@ -7,7 +7,7 @@ interface BankDistributionProps {
 }
 
 export default function BankDistribution({ bankTotals, totalAmount }: BankDistributionProps) {
-  const banks = Object.entries(bankTotals);
+  const banks = Object.entries(bankTotals || {});
 
   return (
     <div>
