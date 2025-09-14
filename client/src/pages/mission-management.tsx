@@ -24,6 +24,7 @@ export default function MissionManagement() {
   const [expenseCounter, setExpenseCounter] = useState(1);
   const [localStatement, setLocalStatement] = useState<string>("");
   const [localMissionDate, setLocalMissionDate] = useState<string>("");
+  const [localExpenses, setLocalExpenses] = useState<ExpenseItem[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
   // Fetch all missions from server
@@ -47,22 +48,23 @@ export default function MissionManagement() {
     if (activeMission) {
       setLocalStatement(activeMission.statement || "");
       setLocalMissionDate(activeMission.missionDate || "");
+      setLocalExpenses(activeMission.expenses || []);
       setHasUnsavedChanges(false);
     }
   }, [activeMission?.id]);
 
-  // Initialize expense counter based on active mission
+  // Initialize expense counter based on local expenses
   useEffect(() => {
-    if (activeMission && activeMission.expenses) {
+    if (localExpenses && localExpenses.length > 0) {
       const maxId = Math.max(
         0,
-        ...activeMission.expenses
+        ...localExpenses
           .map(expense => parseInt(expense.id.replace('expense-', '')))
           .filter(num => !isNaN(num))
       );
       setExpenseCounter(maxId + 1);
     }
-  }, [activeMission]);
+  }, [localExpenses]);
 
   // Create mission mutation
   const createMissionMutation = useMutation({
@@ -219,18 +221,19 @@ export default function MissionManagement() {
     }
   }, [updateActiveMission]);
 
-  // Manual save function
+  // Manual save function for all changes
   const saveChanges = useCallback(() => {
     if (!activeMission || !hasUnsavedChanges) return;
     
     const updates: Partial<InsertMission> = {
       statement: localStatement,
-      missionDate: localMissionDate
+      missionDate: localMissionDate,
+      expenses: localExpenses
     };
     
     updateActiveMission(updates);
     setHasUnsavedChanges(false);
-  }, [activeMission, hasUnsavedChanges, localStatement, localMissionDate, updateActiveMission]);
+  }, [activeMission, hasUnsavedChanges, localStatement, localMissionDate, localExpenses, updateActiveMission]);
 
   // Mission details change handlers (local only)
   const handleMissionDateChange = useCallback((date: string) => {
@@ -244,7 +247,7 @@ export default function MissionManagement() {
   }, []);
 
 
-  // Expense management functions
+  // Expense management functions (local only)
   const addExpenseItem = useCallback((type: string) => {
     const newExpense: ExpenseItem = {
       id: `expense-${expenseCounter}`,
@@ -253,27 +256,22 @@ export default function MissionManagement() {
       banks: []
     };
 
-    const currentExpenses = activeMission?.expenses || [];
-    updateActiveMission({
-      expenses: [...currentExpenses, newExpense]
-    });
-
+    setLocalExpenses(prev => [...prev, newExpense]);
+    setHasUnsavedChanges(true);
     setExpenseCounter(prev => prev + 1);
-  }, [expenseCounter, activeMission?.expenses, updateActiveMission]);
+  }, [expenseCounter]);
 
   const updateExpenseItem = useCallback((id: string, updates: Partial<ExpenseItem>) => {
-    const currentExpenses: ExpenseItem[] = activeMission?.expenses || [];
-    const updatedExpenses = currentExpenses.map((expense: ExpenseItem) =>
+    setLocalExpenses(prev => prev.map((expense: ExpenseItem) =>
       expense.id === id ? { ...expense, ...updates } : expense
-    );
-    updateActiveMission({ expenses: updatedExpenses });
-  }, [activeMission?.expenses, updateActiveMission]);
+    ));
+    setHasUnsavedChanges(true);
+  }, []);
 
   const removeExpenseItem = useCallback((id: string) => {
-    const currentExpenses: ExpenseItem[] = activeMission?.expenses || [];
-    const updatedExpenses = currentExpenses.filter((expense: ExpenseItem) => expense.id !== id);
-    updateActiveMission({ expenses: updatedExpenses });
-  }, [activeMission?.expenses, updateActiveMission]);
+    setLocalExpenses(prev => prev.filter((expense: ExpenseItem) => expense.id !== id));
+    setHasUnsavedChanges(true);
+  }, []);
 
   // Export to Excel
   const exportToExcel = async () => {
@@ -346,16 +344,7 @@ export default function MissionManagement() {
 
   // Calculate totals
   const calculateTotals = (): Totals => {
-    if (!activeMission) {
-      return {
-        totalAmount: 0,
-        itemCount: 0,
-        bankCount: 0,
-        bankTotals: {}
-      };
-    }
-
-    const expenses: ExpenseItem[] = activeMission.expenses || [];
+    const expenses: ExpenseItem[] = localExpenses || [];
     const totalAmount = expenses.reduce((sum: number, expense: ExpenseItem) => sum + expense.amount, 0);
     const bankTotals: Record<string, number> = {};
 
@@ -539,33 +528,12 @@ export default function MissionManagement() {
                 onMissionDateChange={handleMissionDateChange}
                 onStatementChange={handleStatementChange}
               />
-              
-              {/* Save Button */}
-              {hasUnsavedChanges && (
-                <div className="mt-6 flex justify-start">
-                  <Button 
-                    onClick={saveChanges}
-                    variant="default"
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <Save className="w-4 h-4" />
-                    حفظ التغييرات
-                  </Button>
-                </div>
-              )}
-              
-              {!hasUnsavedChanges && localStatement && (
-                <div className="mt-6 text-sm text-green-600 flex items-center gap-2">
-                  <Save className="w-4 h-4" />
-                  تم الحفظ
-                </div>
-              )}
             </Card>
 
             {/* Expense Management */}
             <Card className="p-6 bg-background border shadow-sm">
               <ExpenseManagement
-                expenses={activeMission.expenses || []}
+                expenses={localExpenses}
                 totals={totals}
                 onAddExpense={addExpenseItem}
                 onUpdateExpense={updateExpenseItem}
@@ -588,10 +556,28 @@ export default function MissionManagement() {
                 حفظ البيانات
               </h3>
 
-              <div className="space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  يتم حفظ التغييرات تلقائياً في النظام
-                </div>
+              <div className="space-y-4">
+                {hasUnsavedChanges ? (
+                  <div className="space-y-3">
+                    <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                      ⚠️ لديك تغييرات غير محفوظة
+                    </div>
+                    <Button 
+                      onClick={saveChanges}
+                      variant="default"
+                      className="w-full flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                      disabled={updateMissionMutation.isPending}
+                    >
+                      <Save className="w-4 h-4" />
+                      {updateMissionMutation.isPending ? 'جاري الحفظ...' : 'حفظ جميع التغييرات'}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-sm text-green-600 bg-green-50 p-3 rounded-lg border border-green-200 flex items-center gap-2">
+                    <Save className="w-4 h-4" />
+                    جميع التغييرات محفوظة
+                  </div>
+                )}
 
                 <div className="flex gap-2 text-xs">
                   <span className="px-2 py-1 bg-primary/10 text-primary rounded">
@@ -604,13 +590,6 @@ export default function MissionManagement() {
                     {totals.totalAmount.toFixed(2)} جنيه
                   </span>
                 </div>
-
-                {(updateMissionMutation.isPending || deleteMissionMutation.isPending) && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    جاري الحفظ...
-                  </div>
-                )}
               </div>
             </Card>
           </div>
