@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,21 +36,23 @@ export default function EmployeeLookup({ employee, onEmployeeChange }: EmployeeL
     }
   };
 
-  // Update parent when employee is fetched
-  if (fetchedEmployee && !error) {
-    const emp = fetchedEmployee as Employee;
-    const employeeData = {
-      code: emp.code,
-      name: emp.name,
-      branch: emp.branch
-    };
-    
-    if (!employee || employee.code !== employeeData.code) {
-      onEmployeeChange(employeeData);
+  // Update parent when employee is fetched using useEffect
+  useEffect(() => {
+    if (fetchedEmployee && !error) {
+      const emp = fetchedEmployee as Employee;
+      const employeeData = {
+        code: emp.code,
+        name: emp.name,
+        branch: emp.branch
+      };
+      
+      if (!employee || employee.code !== employeeData.code) {
+        onEmployeeChange(employeeData);
+      }
+    } else if (error && employee) {
+      onEmployeeChange(null);
     }
-  } else if (error && employee) {
-    onEmployeeChange(null);
-  }
+  }, [fetchedEmployee, error, employee, onEmployeeChange]);
 
   return (
     <div>
