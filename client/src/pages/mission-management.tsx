@@ -243,9 +243,27 @@ export default function MissionManagement() {
     
     activeMission.expenses.forEach(expense => {
       if (expense.banks && expense.banks.length > 0 && expense.amount > 0) {
-        // Divide the expense amount equally among selected banks
+        // Divide the expense amount equally among selected banks within this expense item
         const amountPerBank = expense.amount / expense.banks.length;
-        expense.banks.forEach(bank => {
+        expense.banks.forEach(bankName => {
+          bankTotals[bankName] = (bankTotals[bankName] || 0) + amountPerBank;
+        });
+      }
+    });
+
+    const uniqueBanks = new Set<string>();
+    activeMission.expenses.forEach(expense => {
+      if (expense.banks) {
+        expense.banks.forEach(bank => uniqueBanks.add(bank));
+      }
+    });
+
+    return {
+      totalAmount,
+      itemCount: activeMission.expenses.length,
+      bankCount: uniqueBanks.size,
+      bankTotals
+    };ks.forEach(bank => {
           bankTotals[bank] = (bankTotals[bank] || 0) + amountPerBank;
         });
       }
