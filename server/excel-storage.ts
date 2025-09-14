@@ -291,7 +291,10 @@ export class ExcelStorage implements IStorage {
       'fees': 'رسوم',
       'tips': 'اكراميات',
       'office-supplies': 'أدوات مكتبية',
-      'hospitality': 'ضيافة'
+      'hospitality': 'ضيافة',
+      // Add common variations
+      'transport': 'انتقالات',
+      'tip': 'اكراميات'
     };
 
     // Helper function to get total expense amount by Arabic type (sum all expenses of same type)
@@ -365,89 +368,83 @@ export class ExcelStorage implements IStorage {
       return dayNames[date.getDay()] || '';
     };
 
-    // Create the main export data
+    // Create the main export data matching the exact format
     const exportData: any[] = [];
     
-    // If there are employees but no missions, include all employees
-    if (employees.length > 0) {
-      employees.forEach(employee => {
-        const employeeMissions = missionsByEmployee.get(employee.code) || [];
+    // Process all employees
+    employees.forEach(employee => {
+      const employeeMissions = missionsByEmployee.get(employee.code) || [];
+      
+      // Create a row for this employee
+      const row: any = {
+        'اسم الموظف': employee.name,
+        'الكود': employee.code,
+        'فرع': employee.branch,
+        'التاريخ': '',
+        'اليوم': '',
+        'بيـــــــــــــــــــــــان': ''
+      };
+      
+      // If employee has missions, use data from first mission for date/day/statement
+      if (employeeMissions.length > 0) {
+        const firstMission = employeeMissions[0];
+        row['التاريخ'] = firstMission.missionDate || '';
+        row['اليوم'] = firstMission.missionDate ? getDayName(firstMission.missionDate) : '';
+        row['بيـــــــــــــــــــــــان'] = employeeMissions.map(m => m.statement || '').filter(s => s).join(' + ') || '';
+      }
+      
+      let grandTotal = 0;
+      
+      // Process up to 4 missions for this employee
+      for (let i = 1; i <= 4; i++) {
+        const mission = employeeMissions[i - 1];
         
-        // If employee has no missions, create a row with empty mission data
-        if (employeeMissions.length === 0) {
-          const row: any = {
-            'اسم الموظف': employee.name,
-            'الكود': employee.code,
-            'فرع': employee.branch,
-            'التاريخ': '',
-            'اليوم': '',
-            'بيـــــــــــــــــــــــان': ''
-          };
+        if (mission && mission.expenses && mission.expenses.length > 0) {
+          const expenses = mission.expenses;
           
-          // Add empty data for 4 missions
-          for (let i = 1; i <= 4; i++) {
-            row[`بنك / شركة ( مامورية${i})`] = '';
-            row[`انتقالات${i}`] = 0;
-            row[`رسوم${i}`] = 0;
-            row[`اكراميات${i}`] = 0;
-            row[`أدوات مكتبية${i}`] = 0;
-            row[`ضيافة${i}`] = 0;
-            row[`الاجمالى${i}`] = 0;
-          }
-          row['الاجمالى'] = 0;
+          // Get primary bank for this mission
+          const primaryBank = getPrimaryBank(expenses);
           
-          exportData.push(row);
+          // Calculate amounts for each expense type
+          const transportationAmount = getExpenseAmount(expenses, 'انتقالات');
+          const feesAmount = getExpenseAmount(expenses, 'رسوم');
+          const tipsAmount = getExpenseAmount(expenses, 'اكراميات');
+          const officeSuppliesAmount = getExpenseAmount(expenses, 'أدوات مكتبية');
+          const hospitalityAmount = getExpenseAmount(expenses, 'ضيافة');
+          
+          // Calculate mission total from actual expense amounts
+          const missionTotal = transportationAmount + feesAmount + tipsAmount + officeSuppliesAmount + hospitalityAmount;
+          
+          row[`بنك / شركة ( مامورية${i})`] = primaryBank || 'غير محدد';
+          row[`انتقالات${i}`] = transportationAmount;
+          row[`رسوم${i}`] = feesAmount;
+          row[`اكراميات${i}`] = tipsAmount;
+          row[`أدوات مكتبية${i}`] = officeSuppliesAmount;
+          row[`ضيافة${i}`] = hospitalityAmount;
+          row[`الاجمالى${i}`] = missionTotal;
+          
+          grandTotal += missionTotal;
         } else {
-          // Create a row for this employee with their missions
-          const row: any = {
-            'اسم الموظف': employee.name,
-            'الكود': employee.code,
-            'فرع': employee.branch,
-            'التاريخ': employeeMissions[0]?.missionDate || '',
-            'اليوم': employeeMissions[0]?.missionDate ? getDayName(employeeMissions[0].missionDate) : '',
-            'بيـــــــــــــــــــــــان': employeeMissions.map(m => m.statement || '').filter(s => s).join('; ') || ''
-          };
-          
-          let totalAmount = 0;
-          
-          // Add data for up to 4 missions
-          for (let i = 1; i <= 4; i++) {
-            const mission = employeeMissions[i - 1];
-            if (mission) {
-              const expenses = mission.expenses || [];
-              const missionTotal = typeof mission.totalAmount === 'number' ? mission.totalAmount : parseFloat(mission.totalAmount?.toString() || '0');
-              const validMissionTotal = isNaN(missionTotal) ? 0 : missionTotal;
-              
-              // Get primary bank for this mission
-              const primaryBank = getPrimaryBank(expenses);
-              row[`بنك / شركة ( مامورية${i})`] = primaryBank;
-              row[`انتقالات${i}`] = getExpenseAmount(expenses, 'انتقالات');
-              row[`رسوم${i}`] = getExpenseAmount(expenses, 'رسوم');
-              row[`اكراميات${i}`] = getExpenseAmount(expenses, 'اكراميات');
-              row[`أدوات مكتبية${i}`] = getExpenseAmount(expenses, 'أدوات مكتبية');
-              row[`ضيافة${i}`] = getExpenseAmount(expenses, 'ضيافة');
-              row[`الاجمالى${i}`] = validMissionTotal;
-              
-              totalAmount += validMissionTotal;
-            } else {
-              // Empty mission data
-              row[`بنك / شركة ( مامورية${i})`] = '';
-              row[`انتقالات${i}`] = 0;
-              row[`رسوم${i}`] = 0;
-              row[`اكراميات${i}`] = 0;
-              row[`أدوات مكتبية${i}`] = 0;
-              row[`ضيافة${i}`] = 0;
-              row[`الاجمالى${i}`] = 0;
-            }
-          }
-          
-          row['الاجمالى'] = totalAmount;
-          exportData.push(row);
+          // Empty mission - show "لا يوجد مامورية" for bank and 0 for all amounts
+          row[`بنك / شركة ( مامورية${i})`] = 'لا يوجد مامورية';
+          row[`انتقالات${i}`] = 0;
+          row[`رسوم${i}`] = 0;
+          row[`اكراميات${i}`] = 0;
+          row[`أدوات مكتبية${i}`] = 0;
+          row[`ضيافة${i}`] = 0;
+          row[`الاجمالى${i}`] = 0;
         }
-      });
-    } else {
-      // If no employees data, group missions by employee code
-      missionsByEmployee.forEach((employeeMissions, employeeCode) => {
+      }
+      
+      row['الاجمالى'] = grandTotal;
+      exportData.push(row);
+    });
+    
+    // Also process missions from employees not in the employees list
+    missionsByEmployee.forEach((employeeMissions, employeeCode) => {
+      // Check if this employee is already processed
+      const existingEmployee = employees.find(emp => emp.code === employeeCode);
+      if (!existingEmployee && employeeMissions.length > 0) {
         const firstMission = employeeMissions[0];
         const row: any = {
           'اسم الموظف': firstMission.employeeName,
@@ -455,33 +452,37 @@ export class ExcelStorage implements IStorage {
           'فرع': firstMission.employeeBranch,
           'التاريخ': firstMission.missionDate || '',
           'اليوم': firstMission.missionDate ? getDayName(firstMission.missionDate) : '',
-          'بيـــــــــــــــــــــــان': employeeMissions.map(m => m.statement || '').filter(s => s).join('; ') || ''
+          'بيـــــــــــــــــــــــان': employeeMissions.map(m => m.statement || '').filter(s => s).join(' + ') || ''
         };
         
-        let totalAmount = 0;
+        let grandTotal = 0;
         
-        // Add data for up to 4 missions
         for (let i = 1; i <= 4; i++) {
           const mission = employeeMissions[i - 1];
-          if (mission) {
-            const expenses = mission.expenses || [];
-            const missionTotal = typeof mission.totalAmount === 'number' ? mission.totalAmount : parseFloat(mission.totalAmount?.toString() || '0');
-            const validMissionTotal = isNaN(missionTotal) ? 0 : missionTotal;
-            
-            // Get primary bank for this mission
+          
+          if (mission && mission.expenses && mission.expenses.length > 0) {
+            const expenses = mission.expenses;
             const primaryBank = getPrimaryBank(expenses);
-            row[`بنك / شركة ( مامورية${i})`] = primaryBank;
-            row[`انتقالات${i}`] = getExpenseAmount(expenses, 'انتقالات');
-            row[`رسوم${i}`] = getExpenseAmount(expenses, 'رسوم');
-            row[`اكراميات${i}`] = getExpenseAmount(expenses, 'اكراميات');
-            row[`أدوات مكتبية${i}`] = getExpenseAmount(expenses, 'أدوات مكتبية');
-            row[`ضيافة${i}`] = getExpenseAmount(expenses, 'ضيافة');
-            row[`الاجمالى${i}`] = validMissionTotal;
             
-            totalAmount += validMissionTotal;
+            const transportationAmount = getExpenseAmount(expenses, 'انتقالات');
+            const feesAmount = getExpenseAmount(expenses, 'رسوم');
+            const tipsAmount = getExpenseAmount(expenses, 'اكراميات');
+            const officeSuppliesAmount = getExpenseAmount(expenses, 'أدوات مكتبية');
+            const hospitalityAmount = getExpenseAmount(expenses, 'ضيافة');
+            
+            const missionTotal = transportationAmount + feesAmount + tipsAmount + officeSuppliesAmount + hospitalityAmount;
+            
+            row[`بنك / شركة ( مامورية${i})`] = primaryBank || 'غير محدد';
+            row[`انتقالات${i}`] = transportationAmount;
+            row[`رسوم${i}`] = feesAmount;
+            row[`اكراميات${i}`] = tipsAmount;
+            row[`أدوات مكتبية${i}`] = officeSuppliesAmount;
+            row[`ضيافة${i}`] = hospitalityAmount;
+            row[`الاجمالى${i}`] = missionTotal;
+            
+            grandTotal += missionTotal;
           } else {
-            // Empty mission data
-            row[`بنك / شركة ( مامورية${i})`] = '';
+            row[`بنك / شركة ( مامورية${i})`] = 'لا يوجد مامورية';
             row[`انتقالات${i}`] = 0;
             row[`رسوم${i}`] = 0;
             row[`اكراميات${i}`] = 0;
@@ -491,10 +492,10 @@ export class ExcelStorage implements IStorage {
           }
         }
         
-        row['الاجمالى'] = totalAmount;
+        row['الاجمالى'] = grandTotal;
         exportData.push(row);
-      });
-    }
+      }
+    });
 
     const workbook = XLSX.utils.book_new();
     
