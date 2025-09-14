@@ -285,14 +285,77 @@ export class ExcelStorage implements IStorage {
       });
     });
 
-    // Helper function to get total expense amount by type (sum all expenses of same type)
-    const getExpenseAmount = (expenses: ExpenseItem[], expenseType: string): number => {
+    // Translation mapping from English to Arabic expense types
+    const expenseTypeMapping: { [key: string]: string } = {
+      'transportation': 'انتقالات',
+      'fees': 'رسوم',
+      'tips': 'اكراميات',
+      'office-supplies': 'أدوات مكتبية',
+      'hospitality': 'ضيافة'
+    };
+
+    // Helper function to get total expense amount by Arabic type (sum all expenses of same type)
+    const getExpenseAmount = (expenses: ExpenseItem[], arabicExpenseType: string): number => {
+      // Find the English equivalent
+      const englishType = Object.keys(expenseTypeMapping).find(englishKey => 
+        expenseTypeMapping[englishKey] === arabicExpenseType
+      );
+      
+      if (!englishType) return 0;
+      
       return expenses
-        .filter(exp => exp.type === expenseType)
+        .filter(exp => exp.type === englishType)
         .reduce((sum, exp) => {
           const amount = parseFloat(String(exp.amount || 0));
           return sum + (isNaN(amount) ? 0 : amount);
         }, 0);
+    };
+
+    // Helper function to get banks for a specific expense type
+    const getBanksForExpenseType = (expenses: ExpenseItem[], arabicExpenseType: string): string[] => {
+      const englishType = Object.keys(expenseTypeMapping).find(englishKey => 
+        expenseTypeMapping[englishKey] === arabicExpenseType
+      );
+      
+      if (!englishType) return [];
+      
+      const banksSet = new Set<string>();
+      expenses
+        .filter(exp => exp.type === englishType)
+        .forEach(exp => {
+          if (exp.banks && exp.banks.length > 0) {
+            exp.banks.forEach(bank => banksSet.add(bank));
+          }
+        });
+      
+      return Array.from(banksSet);
+    };
+
+    // Helper function to get primary bank for a mission (most frequent bank)
+    const getPrimaryBank = (expenses: ExpenseItem[]): string => {
+      const bankCounts = new Map<string, number>();
+      
+      expenses.forEach(exp => {
+        if (exp.banks && exp.banks.length > 0) {
+          exp.banks.forEach(bank => {
+            bankCounts.set(bank, (bankCounts.get(bank) || 0) + 1);
+          });
+        }
+      });
+      
+      if (bankCounts.size === 0) return '';
+      
+      // Return the bank with highest frequency
+      let maxCount = 0;
+      let primaryBank = '';
+      bankCounts.forEach((count, bank) => {
+        if (count > maxCount) {
+          maxCount = count;
+          primaryBank = bank;
+        }
+      });
+      
+      return primaryBank;
     };
 
     // Helper function to get day name in Arabic
@@ -355,7 +418,9 @@ export class ExcelStorage implements IStorage {
               const missionTotal = typeof mission.totalAmount === 'number' ? mission.totalAmount : parseFloat(mission.totalAmount?.toString() || '0');
               const validMissionTotal = isNaN(missionTotal) ? 0 : missionTotal;
               
-              row[`بنك / شركة ( مامورية${i})`] = mission.bank || '';
+              // Get primary bank for this mission
+              const primaryBank = getPrimaryBank(expenses);
+              row[`بنك / شركة ( مامورية${i})`] = primaryBank;
               row[`انتقالات${i}`] = getExpenseAmount(expenses, 'انتقالات');
               row[`رسوم${i}`] = getExpenseAmount(expenses, 'رسوم');
               row[`اكراميات${i}`] = getExpenseAmount(expenses, 'اكراميات');
@@ -403,7 +468,9 @@ export class ExcelStorage implements IStorage {
             const missionTotal = typeof mission.totalAmount === 'number' ? mission.totalAmount : parseFloat(mission.totalAmount?.toString() || '0');
             const validMissionTotal = isNaN(missionTotal) ? 0 : missionTotal;
             
-            row[`بنك / شركة ( مامورية${i})`] = mission.bank || '';
+            // Get primary bank for this mission
+            const primaryBank = getPrimaryBank(expenses);
+            row[`بنك / شركة ( مامورية${i})`] = primaryBank;
             row[`انتقالات${i}`] = getExpenseAmount(expenses, 'انتقالات');
             row[`رسوم${i}`] = getExpenseAmount(expenses, 'رسوم');
             row[`اكراميات${i}`] = getExpenseAmount(expenses, 'اكراميات');
