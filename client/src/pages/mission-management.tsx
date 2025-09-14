@@ -234,27 +234,15 @@ export default function MissionManagement() {
   // Export to Excel
   const exportToExcel = async () => {
     try {
-      const response = await fetch('/api/missions/export');
-      if (!response.ok) {
-        throw new Error('فشل في تصدير البيانات');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `missions-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
+      const { exportMissionsToExcel } = await import('@/lib/excelUtils');
+      exportMissionsToExcel(missions);
+      
       toast({
         title: "تم تصدير البيانات بنجاح",
         description: "تم تصدير جميع المأموريات إلى ملف Excel",
       });
     } catch (error) {
+      console.error('Excel export error:', error);
       toast({
         title: "خطأ في التصدير",
         description: "حدث خطأ أثناء تصدير البيانات إلى Excel",
@@ -264,37 +252,35 @@ export default function MissionManagement() {
   };
 
   // Import from Excel
-  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
-    fetch('/api/missions/import', {
-      method: 'POST',
-      body: formData,
-    })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('فشل في استيراد البيانات');
-        }
-        return response.json();
-      })
-      .then(() => {
+    try {
+      const { importMissionsFromExcel } = await import('@/lib/excelUtils');
+      const result = await importMissionsFromExcel(file);
+      
+      if (result.success) {
         refreshMissions();
         toast({
           title: "تم استيراد البيانات بنجاح",
-          description: "تم استيراد المأموريات من ملف Excel",
+          description: result.message,
         });
-      })
-      .catch(error => {
+      } else {
         toast({
           title: "خطأ في الاستيراد",
-          description: "حدث خطأ أثناء استيراد البيانات من Excel",
+          description: result.message,
           variant: "destructive"
         });
+      }
+    } catch (error) {
+      console.error('Excel import error:', error);
+      toast({
+        title: "خطأ في الاستيراد",
+        description: "حدث خطأ أثناء استيراد البيانات من Excel",
+        variant: "destructive"
       });
+    }
 
     // Reset the file input
     event.target.value = '';

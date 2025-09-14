@@ -5,12 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar, Download, FileText, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useMissions } from '@/hooks/use-missions';
+import * as XLSX from 'xlsx';
 
 export default function PeriodReport() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
+  const { missions } = useMissions();
 
   const handleExport = async () => {
     if (!fromDate || !toDate) {
@@ -33,27 +36,93 @@ export default function PeriodReport() {
 
     setIsExporting(true);
     try {
-      const response = await fetch(`/api/missions/period-export?from=${fromDate}&to=${toDate}`);
-      if (!response.ok) {
-        throw new Error('فشل في تصدير التقرير');
+      // Filter missions by date range
+      const filteredMissions = missions.filter(mission => {
+        const missionDate = new Date(mission.missionDate);
+        const from = new Date(fromDate);
+        const to = new Date(toDate);
+        return missionDate >= from && missionDate <= to;
+      });
+
+      if (filteredMissions.length === 0) {
+        toast({
+          title: "لا توجد بيانات",
+          description: "لا توجد مأموريات في الفترة المحددة",
+          variant: "destructive"
+        });
+        return;
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `period-report-${fromDate}-to-${toDate}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Generate Excel report
+      const workbook = XLSX.utils.book_new();
+      
+      // Summary by employee
+      const summaryByEmployee: Record<string, { name: string; branch: string; total: number; count: number }> = {};
+      const expensesByBank: Record<string, number> = {};
+      const expensesByType: Record<string, number> = {};
+
+      filteredMissions.forEach(mission => {
+        const key = `${mission.employeeCode}-${mission.employeeName}`;
+        if (!summaryByEmployee[key]) {
+          summaryByEmployee[key] = {
+            name: mission.employeeName,
+            branch: mission.employeeBranch,
+            total: 0,
+            count: 0
+          };
+        }
+        summaryByEmployee[key].total += parseFloat(mission.totalAmount);
+        summaryByEmployee[key].count += 1;
+
+        // Aggregate expenses by bank and type
+        mission.expenses.forEach(expense => {
+          expense.banks.forEach(bank => {
+            const amountPerBank = expense.amount / expense.banks.length;
+            expensesByBank[bank] = (expensesByBank[bank] || 0) + amountPerBank;
+          });
+          expensesByType[expense.type] = (expensesByType[expense.type] || 0) + expense.amount;
+        });
+      });
+
+      // Employee summary sheet
+      const employeeSummary = Object.values(summaryByEmployee).map(emp => ({
+        'اسم الموظف': emp.name,
+        'الفرع': emp.branch,
+        'عدد المأموريات': emp.count,
+        'إجمالي المصروفات': emp.total
+      }));
+
+      const employeeWs = XLSX.utils.json_to_sheet(employeeSummary);
+      XLSX.utils.book_append_sheet(workbook, employeeWs, 'ملخص الموظفين');
+
+      // Bank summary sheet
+      const bankSummary = Object.entries(expensesByBank).map(([bank, total]) => ({
+        'البنك': bank,
+        'إجمالي المصروفات': total
+      }));
+
+      const bankWs = XLSX.utils.json_to_sheet(bankSummary);
+      XLSX.utils.book_append_sheet(workbook, bankWs, 'ملخص البنوك');
+
+      // Expense type summary sheet
+      const typeSummary = Object.entries(expensesByType).map(([type, total]) => ({
+        'نوع المصروف': type,
+        'إجمالي المبلغ': total
+      }));
+
+      const typeWs = XLSX.utils.json_to_sheet(typeSummary);
+      XLSX.utils.book_append_sheet(workbook, typeWs, 'ملخص أنواع المصروفات');
+
+      // Export file
+      const filename = `period-report-${fromDate}-to-${toDate}.xlsx`;
+      XLSX.writeFile(workbook, filename);
 
       toast({
         title: "تم تصدير التقرير بنجاح",
         description: `تم تصدير تقرير الفترة من ${fromDate} إلى ${toDate}`,
       });
     } catch (error) {
+      console.error('Period report export error:', error);
       toast({
         title: "خطأ في التصدير",
         description: "حدث خطأ أثناء تصدير تقرير الفترة",
