@@ -36,7 +36,7 @@ export default function EmployeeLookup({ employee, onEmployeeChange }: EmployeeL
     }
   };
 
-  // Update parent when employee is fetched using useEffect
+  // Update parent when employee is fetched - moved to handleCodeChange to avoid infinite loops
   useEffect(() => {
     if (fetchedEmployee && !error) {
       const emp = fetchedEmployee as Employee;
@@ -52,7 +52,7 @@ export default function EmployeeLookup({ employee, onEmployeeChange }: EmployeeL
     } else if (error && employee) {
       onEmployeeChange(null);
     }
-  }, [fetchedEmployee, error, employee, onEmployeeChange]);
+  }, [fetchedEmployee, error]); // Removed onEmployeeChange and employee from deps to prevent infinite loop
 
   return (
     <div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -134,12 +134,12 @@ export default function MissionManagement() {
     createMissionMutation.mutate(newMissionData);
   };
 
-  const updateActiveMission = (updates: Partial<InsertMission>) => {
+  const updateActiveMission = useCallback((updates: Partial<InsertMission>) => {
     if (!activeMission) return;
 
     // Calculate total amount from expenses
     const totalAmount = (updates.expenses || activeMission.expenses || [])
-      .reduce((sum, expense) => sum + expense.amount, 0)
+      .reduce((sum: number, expense: ExpenseItem) => sum + expense.amount, 0)
       .toString();
 
     const updatedData = {
@@ -147,11 +147,23 @@ export default function MissionManagement() {
       totalAmount
     };
 
+    // Equality guard to prevent redundant updates
+    const hasChanges = Object.keys(updatedData).some(key => {
+      const newValue = updatedData[key as keyof typeof updatedData];
+      const currentValue = activeMission[key as keyof Mission];
+      if (key === 'expenses') {
+        return JSON.stringify(newValue) !== JSON.stringify(currentValue);
+      }
+      return newValue !== currentValue;
+    });
+
+    if (!hasChanges) return;
+
     updateMissionMutation.mutate({
       id: activeMission.id,
       updates: updatedData
     });
-  };
+  }, [activeMission, updateMissionMutation]);
 
   const selectMission = (missionId: string) => {
     setActiveMissionId(missionId);
@@ -181,7 +193,7 @@ export default function MissionManagement() {
   };
 
   // Employee change handler
-  const handleEmployeeChange = (employee: { code: number; name: string; branch: string } | null) => {
+  const handleEmployeeChange = useCallback((employee: { code: number; name: string; branch: string } | null) => {
     if (employee) {
       updateActiveMission({
         employeeCode: employee.code,
@@ -195,19 +207,19 @@ export default function MissionManagement() {
         employeeBranch: ''
       });
     }
-  };
+  }, [updateActiveMission]);
 
   // Mission details change handlers
-  const handleMissionDateChange = (date: string) => {
+  const handleMissionDateChange = useCallback((date: string) => {
     updateActiveMission({ missionDate: date });
-  };
+  }, [updateActiveMission]);
 
-  const handleStatementChange = (statement: string) => {
+  const handleStatementChange = useCallback((statement: string) => {
     updateActiveMission({ statement });
-  };
+  }, [updateActiveMission]);
 
   // Expense management functions
-  const addExpenseItem = (type: string) => {
+  const addExpenseItem = useCallback((type: string) => {
     const newExpense: ExpenseItem = {
       id: `expense-${expenseCounter}`,
       type,
@@ -221,21 +233,21 @@ export default function MissionManagement() {
     });
 
     setExpenseCounter(prev => prev + 1);
-  };
+  }, [expenseCounter, activeMission?.expenses, updateActiveMission]);
 
-  const updateExpenseItem = (id: string, updates: Partial<ExpenseItem>) => {
-    const currentExpenses = activeMission?.expenses || [];
-    const updatedExpenses = currentExpenses.map(expense =>
+  const updateExpenseItem = useCallback((id: string, updates: Partial<ExpenseItem>) => {
+    const currentExpenses: ExpenseItem[] = activeMission?.expenses || [];
+    const updatedExpenses = currentExpenses.map((expense: ExpenseItem) =>
       expense.id === id ? { ...expense, ...updates } : expense
     );
     updateActiveMission({ expenses: updatedExpenses });
-  };
+  }, [activeMission?.expenses, updateActiveMission]);
 
-  const removeExpenseItem = (id: string) => {
-    const currentExpenses = activeMission?.expenses || [];
-    const updatedExpenses = currentExpenses.filter(expense => expense.id !== id);
+  const removeExpenseItem = useCallback((id: string) => {
+    const currentExpenses: ExpenseItem[] = activeMission?.expenses || [];
+    const updatedExpenses = currentExpenses.filter((expense: ExpenseItem) => expense.id !== id);
     updateActiveMission({ expenses: updatedExpenses });
-  };
+  }, [activeMission?.expenses, updateActiveMission]);
 
   // Export to Excel
   const exportToExcel = async () => {
