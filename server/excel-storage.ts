@@ -265,57 +265,201 @@ export class ExcelStorage implements IStorage {
     
     const missions = Array.from(this.missions.values());
     const employees = Array.from(this.employees.values());
-    const banks = Array.from(this.banks.values());
-
-    // Create detailed missions sheet
-    const missionsData = missions.map(mission => {
-      const expenses = mission.expenses || [];
-      const expenseDetails = expenses.map((exp: ExpenseItem) => 
-        `${exp.type}: ${exp.amount} (${exp.banks && exp.banks.length > 0 ? exp.banks.join(', ') : 'لا يوجد بنك'})`
-      ).join('; ');
-
-      return {
-        'رقم المأمورية': mission.id,
-        'كود الموظف': mission.employeeCode,
-        'اسم الموظف': mission.employeeName,
-        'الفرع': mission.employeeBranch,
-        'تاريخ المأمورية': mission.missionDate,
-        'البنك الرئيسي': mission.bank || 'غير محدد',
-        'البيان': mission.statement || '',
-        'تفاصيل المصروفات': expenseDetails,
-        'إجمالي المبلغ': mission.totalAmount,
-        'تاريخ الإنشاء': mission.createdAt?.toLocaleDateString('ar-EG') || ''
-      };
+    
+    // Group missions by employee code and sort by date
+    const missionsByEmployee = new Map<number, Mission[]>();
+    missions.forEach(mission => {
+      const employeeCode = mission.employeeCode;
+      if (!missionsByEmployee.has(employeeCode)) {
+        missionsByEmployee.set(employeeCode, []);
+      }
+      missionsByEmployee.get(employeeCode)!.push(mission);
     });
+    
+    // Sort missions by date for each employee (most recent first)
+    missionsByEmployee.forEach((employeeMissions, employeeCode) => {
+      employeeMissions.sort((a, b) => {
+        const dateA = new Date(a.missionDate || '1970-01-01').getTime();
+        const dateB = new Date(b.missionDate || '1970-01-01').getTime();
+        return dateB - dateA; // Sort descending (newest first)
+      });
+    });
+
+    // Helper function to get total expense amount by type (sum all expenses of same type)
+    const getExpenseAmount = (expenses: ExpenseItem[], expenseType: string): number => {
+      return expenses
+        .filter(exp => exp.type === expenseType)
+        .reduce((sum, exp) => {
+          const amount = parseFloat(String(exp.amount || 0));
+          return sum + (isNaN(amount) ? 0 : amount);
+        }, 0);
+    };
+
+    // Helper function to get day name in Arabic
+    const getDayName = (dateString: string): string => {
+      const date = new Date(dateString);
+      const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      return dayNames[date.getDay()] || '';
+    };
+
+    // Create the main export data
+    const exportData: any[] = [];
+    
+    // If there are employees but no missions, include all employees
+    if (employees.length > 0) {
+      employees.forEach(employee => {
+        const employeeMissions = missionsByEmployee.get(employee.code) || [];
+        
+        // If employee has no missions, create a row with empty mission data
+        if (employeeMissions.length === 0) {
+          const row: any = {
+            'اسم الموظف': employee.name,
+            'الكود': employee.code,
+            'فرع': employee.branch,
+            'التاريخ': '',
+            'اليوم': '',
+            'بيـــــــــــــــــــــــان': ''
+          };
+          
+          // Add empty data for 4 missions
+          for (let i = 1; i <= 4; i++) {
+            row[`بنك / شركة ( مامورية${i})`] = '';
+            row[`انتقالات${i}`] = 0;
+            row[`رسوم${i}`] = 0;
+            row[`اكراميات${i}`] = 0;
+            row[`أدوات مكتبية${i}`] = 0;
+            row[`ضيافة${i}`] = 0;
+            row[`الاجمالى${i}`] = 0;
+          }
+          row['الاجمالى'] = 0;
+          
+          exportData.push(row);
+        } else {
+          // Create a row for this employee with their missions
+          const row: any = {
+            'اسم الموظف': employee.name,
+            'الكود': employee.code,
+            'فرع': employee.branch,
+            'التاريخ': employeeMissions[0]?.missionDate || '',
+            'اليوم': employeeMissions[0]?.missionDate ? getDayName(employeeMissions[0].missionDate) : '',
+            'بيـــــــــــــــــــــــان': employeeMissions.map(m => m.statement || '').filter(s => s).join('; ') || ''
+          };
+          
+          let totalAmount = 0;
+          
+          // Add data for up to 4 missions
+          for (let i = 1; i <= 4; i++) {
+            const mission = employeeMissions[i - 1];
+            if (mission) {
+              const expenses = mission.expenses || [];
+              const missionTotal = typeof mission.totalAmount === 'number' ? mission.totalAmount : parseFloat(mission.totalAmount?.toString() || '0');
+              const validMissionTotal = isNaN(missionTotal) ? 0 : missionTotal;
+              
+              row[`بنك / شركة ( مامورية${i})`] = mission.bank || '';
+              row[`انتقالات${i}`] = getExpenseAmount(expenses, 'انتقالات');
+              row[`رسوم${i}`] = getExpenseAmount(expenses, 'رسوم');
+              row[`اكراميات${i}`] = getExpenseAmount(expenses, 'اكراميات');
+              row[`أدوات مكتبية${i}`] = getExpenseAmount(expenses, 'أدوات مكتبية');
+              row[`ضيافة${i}`] = getExpenseAmount(expenses, 'ضيافة');
+              row[`الاجمالى${i}`] = validMissionTotal;
+              
+              totalAmount += validMissionTotal;
+            } else {
+              // Empty mission data
+              row[`بنك / شركة ( مامورية${i})`] = '';
+              row[`انتقالات${i}`] = 0;
+              row[`رسوم${i}`] = 0;
+              row[`اكراميات${i}`] = 0;
+              row[`أدوات مكتبية${i}`] = 0;
+              row[`ضيافة${i}`] = 0;
+              row[`الاجمالى${i}`] = 0;
+            }
+          }
+          
+          row['الاجمالى'] = totalAmount;
+          exportData.push(row);
+        }
+      });
+    } else {
+      // If no employees data, group missions by employee code
+      missionsByEmployee.forEach((employeeMissions, employeeCode) => {
+        const firstMission = employeeMissions[0];
+        const row: any = {
+          'اسم الموظف': firstMission.employeeName,
+          'الكود': employeeCode,
+          'فرع': firstMission.employeeBranch,
+          'التاريخ': firstMission.missionDate || '',
+          'اليوم': firstMission.missionDate ? getDayName(firstMission.missionDate) : '',
+          'بيـــــــــــــــــــــــان': employeeMissions.map(m => m.statement || '').filter(s => s).join('; ') || ''
+        };
+        
+        let totalAmount = 0;
+        
+        // Add data for up to 4 missions
+        for (let i = 1; i <= 4; i++) {
+          const mission = employeeMissions[i - 1];
+          if (mission) {
+            const expenses = mission.expenses || [];
+            const missionTotal = typeof mission.totalAmount === 'number' ? mission.totalAmount : parseFloat(mission.totalAmount?.toString() || '0');
+            const validMissionTotal = isNaN(missionTotal) ? 0 : missionTotal;
+            
+            row[`بنك / شركة ( مامورية${i})`] = mission.bank || '';
+            row[`انتقالات${i}`] = getExpenseAmount(expenses, 'انتقالات');
+            row[`رسوم${i}`] = getExpenseAmount(expenses, 'رسوم');
+            row[`اكراميات${i}`] = getExpenseAmount(expenses, 'اكراميات');
+            row[`أدوات مكتبية${i}`] = getExpenseAmount(expenses, 'أدوات مكتبية');
+            row[`ضيافة${i}`] = getExpenseAmount(expenses, 'ضيافة');
+            row[`الاجمالى${i}`] = validMissionTotal;
+            
+            totalAmount += validMissionTotal;
+          } else {
+            // Empty mission data
+            row[`بنك / شركة ( مامورية${i})`] = '';
+            row[`انتقالات${i}`] = 0;
+            row[`رسوم${i}`] = 0;
+            row[`اكراميات${i}`] = 0;
+            row[`أدوات مكتبية${i}`] = 0;
+            row[`ضيافة${i}`] = 0;
+            row[`الاجمالى${i}`] = 0;
+          }
+        }
+        
+        row['الاجمالى'] = totalAmount;
+        exportData.push(row);
+      });
+    }
 
     const workbook = XLSX.utils.book_new();
     
-    // Add missions sheet
-    const missionsSheet = XLSX.utils.json_to_sheet(missionsData);
-    XLSX.utils.book_append_sheet(workbook, missionsSheet, 'المأموريات');
+    // Create and add the main sheet
+    const mainSheet = XLSX.utils.json_to_sheet(exportData);
+    XLSX.utils.book_append_sheet(workbook, mainSheet, 'تقرير المأموريات');
     
-    // Add employees sheet
-    const employeesData = employees.map(emp => ({
-      'الكود': emp.code,
-      'الاسم': emp.name,
-      'الفرع': emp.branch
-    }));
-    const employeesSheet = XLSX.utils.json_to_sheet(employeesData);
-    XLSX.utils.book_append_sheet(workbook, employeesSheet, 'الموظفين');
-    
-    // Add banks sheet
-    const banksData = banks.map(bank => ({
-      'اسم البنك': bank.name
-    }));
-    const banksSheet = XLSX.utils.json_to_sheet(banksData);
-    XLSX.utils.book_append_sheet(workbook, banksSheet, 'البنوك');
-
     // Set column widths for better readability
-    missionsSheet['!cols'] = [
-      { width: 25 }, { width: 15 }, { width: 30 }, { width: 20 },
-      { width: 15 }, { width: 20 }, { width: 40 }, { width: 50 },
-      { width: 15 }, { width: 20 }
+    const colWidths: any[] = [
+      { width: 20 }, // اسم الموظف
+      { width: 10 }, // الكود
+      { width: 15 }, // فرع
+      { width: 12 }, // التاريخ
+      { width: 10 }, // اليوم
+      { width: 30 }, // بيان
     ];
+    
+    // Add column widths for 4 missions (each mission has 7 columns)
+    for (let i = 0; i < 4; i++) {
+      colWidths.push(
+        { width: 20 }, // بنك / شركة
+        { width: 10 }, // انتقالات
+        { width: 10 }, // رسوم
+        { width: 10 }, // اكراميات
+        { width: 12 }, // أدوات مكتبية
+        { width: 10 }, // ضيافة
+        { width: 12 }  // الاجمالى
+      );
+    }
+    colWidths.push({ width: 15 }); // الاجمالى النهائي
+    
+    mainSheet['!cols'] = colWidths;
 
     XLSX.writeFile(workbook, exportFile);
     return exportFile;
@@ -324,7 +468,7 @@ export class ExcelStorage implements IStorage {
   async importFromExcel(filePath: string): Promise<void> {
     try {
       const workbook = XLSX.readFile(filePath);
-      const worksheet = workbook.Sheets['المأموريات'] || workbook.Sheets['Missions'];
+      const worksheet = workbook.Sheets['تقرير المأموريات'] || workbook.Sheets['المأموريات'] || workbook.Sheets['Missions'];
       
       if (worksheet) {
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
@@ -334,19 +478,86 @@ export class ExcelStorage implements IStorage {
         
         jsonData.forEach((row: any) => {
           try {
-            const mission: Mission = {
-              id: row['رقم المأمورية'] || row.id || randomUUID(),
-              employeeCode: parseInt(row['كود الموظف'] || row.employeeCode),
-              employeeName: row['اسم الموظف'] || row.employeeName,
-              employeeBranch: row['الفرع'] || row.employeeBranch,
-              missionDate: row['تاريخ المأمورية'] || row.missionDate,
-              bank: row['البنك الرئيسي'] || row.bank || null,
-              statement: row['البيان'] || row.statement || null,
-              expenses: this.parseExpenseDetails(row['تفاصيل المصروفات'] || row.expenseDetails || ''),
-              totalAmount: (row['إجمالي المبلغ'] || row.totalAmount || "0").toString(),
-              createdAt: new Date()
-            };
-            this.missions.set(mission.id, mission);
+            const employeeCode = parseInt(row['الكود'] || row.employeeCode);
+            const employeeName = row['اسم الموظف'] || row.employeeName;
+            const employeeBranch = row['فرع'] || row.employeeBranch;
+            const missionDate = row['التاريخ'] || row.missionDate;
+            const statement = row['بيـــــــــــــــــــــــان'] || row.statement || '';
+            
+            // Import up to 4 missions per employee
+            for (let i = 1; i <= 4; i++) {
+              const bankKey = `بنك / شركة ( مامورية${i})`;
+              const bank = row[bankKey];
+              
+              // Check if this mission has any data
+              const hasData = bank || 
+                row[`انتقالات${i}`] || 
+                row[`رسوم${i}`] || 
+                row[`اكراميات${i}`] || 
+                row[`أدوات مكتبية${i}`] || 
+                row[`ضيافة${i}`] ||
+                row[`الاجمالى${i}`];
+              
+              if (hasData) {
+                const expenses: ExpenseItem[] = [];
+                
+                // Add expenses if they have values
+                if (row[`انتقالات${i}`]) {
+                  expenses.push({
+                    id: randomUUID(),
+                    type: 'انتقالات',
+                    amount: parseFloat(row[`انتقالات${i}`]) || 0,
+                    banks: bank ? [bank] : []
+                  });
+                }
+                if (row[`رسوم${i}`]) {
+                  expenses.push({
+                    id: randomUUID(),
+                    type: 'رسوم',
+                    amount: parseFloat(row[`رسوم${i}`]) || 0,
+                    banks: bank ? [bank] : []
+                  });
+                }
+                if (row[`اكراميات${i}`]) {
+                  expenses.push({
+                    id: randomUUID(),
+                    type: 'اكراميات',
+                    amount: parseFloat(row[`اكراميات${i}`]) || 0,
+                    banks: bank ? [bank] : []
+                  });
+                }
+                if (row[`أدوات مكتبية${i}`]) {
+                  expenses.push({
+                    id: randomUUID(),
+                    type: 'أدوات مكتبية',
+                    amount: parseFloat(row[`أدوات مكتبية${i}`]) || 0,
+                    banks: bank ? [bank] : []
+                  });
+                }
+                if (row[`ضيافة${i}`]) {
+                  expenses.push({
+                    id: randomUUID(),
+                    type: 'ضيافة',
+                    amount: parseFloat(row[`ضيافة${i}`]) || 0,
+                    banks: bank ? [bank] : []
+                  });
+                }
+                
+                const mission: Mission = {
+                  id: randomUUID(),
+                  employeeCode,
+                  employeeName,
+                  employeeBranch,
+                  missionDate,
+                  bank: bank || null,
+                  statement,
+                  expenses,
+                  totalAmount: (row[`الاجمالى${i}`] || "0").toString(),
+                  createdAt: new Date()
+                };
+                this.missions.set(mission.id, mission);
+              }
+            }
           } catch (error) {
             console.error('Error parsing imported mission row:', error);
           }
