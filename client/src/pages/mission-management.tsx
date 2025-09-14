@@ -23,7 +23,8 @@ export default function MissionManagement() {
   const [activeMissionId, setActiveMissionId] = useState<string | null>(null);
   const [expenseCounter, setExpenseCounter] = useState(1);
   const [localStatement, setLocalStatement] = useState<string>("");
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [localMissionDate, setLocalMissionDate] = useState<string>("");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
   // Fetch all missions from server
   const { data: missions = [], isLoading, error } = useQuery<Mission[], Error>({
@@ -41,10 +42,12 @@ export default function MissionManagement() {
     }
   }, [activeMissionId, missions]);
 
-  // Update local statement when active mission changes
+  // Update local state when active mission changes
   useEffect(() => {
     if (activeMission) {
       setLocalStatement(activeMission.statement || "");
+      setLocalMissionDate(activeMission.missionDate || "");
+      setHasUnsavedChanges(false);
     }
   }, [activeMission?.id]);
 
@@ -216,35 +219,30 @@ export default function MissionManagement() {
     }
   }, [updateActiveMission]);
 
-  // Debounced update function (must be declared before use)
-  const debouncedUpdateMission = useCallback((updates: Partial<InsertMission>) => {
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
+  // Manual save function
+  const saveChanges = useCallback(() => {
+    if (!activeMission || !hasUnsavedChanges) return;
     
-    debounceTimeoutRef.current = setTimeout(() => {
-      updateActiveMission(updates);
-    }, 2000); // Wait 2 seconds after user stops typing
-  }, [updateActiveMission]);
+    const updates: Partial<InsertMission> = {
+      statement: localStatement,
+      missionDate: localMissionDate
+    };
+    
+    updateActiveMission(updates);
+    setHasUnsavedChanges(false);
+  }, [activeMission, hasUnsavedChanges, localStatement, localMissionDate, updateActiveMission]);
 
-  // Mission details change handlers
+  // Mission details change handlers (local only)
   const handleMissionDateChange = useCallback((date: string) => {
-    debouncedUpdateMission({ missionDate: date });
-  }, [debouncedUpdateMission]);
+    setLocalMissionDate(date);
+    setHasUnsavedChanges(true);
+  }, []);
 
   const handleStatementChange = useCallback((statement: string) => {
-    setLocalStatement(statement); // Update UI immediately
-    debouncedUpdateMission({ statement }); // Save after delay
-  }, [debouncedUpdateMission]);
-
-  // Cleanup debounce timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current);
-      }
-    };
+    setLocalStatement(statement);
+    setHasUnsavedChanges(true);
   }, []);
+
 
   // Expense management functions
   const addExpenseItem = useCallback((type: string) => {
@@ -268,8 +266,8 @@ export default function MissionManagement() {
     const updatedExpenses = currentExpenses.map((expense: ExpenseItem) =>
       expense.id === id ? { ...expense, ...updates } : expense
     );
-    debouncedUpdateMission({ expenses: updatedExpenses });
-  }, [activeMission?.expenses, debouncedUpdateMission]);
+    updateActiveMission({ expenses: updatedExpenses });
+  }, [activeMission?.expenses, updateActiveMission]);
 
   const removeExpenseItem = useCallback((id: string) => {
     const currentExpenses: ExpenseItem[] = activeMission?.expenses || [];
@@ -536,11 +534,32 @@ export default function MissionManagement() {
             {/* Mission Details */}
             <Card className="p-6 bg-background border shadow-sm">
               <MissionDetails
-                missionDate={activeMission.missionDate}
+                missionDate={localMissionDate}
                 statement={localStatement}
                 onMissionDateChange={handleMissionDateChange}
                 onStatementChange={handleStatementChange}
               />
+              
+              {/* Save Button */}
+              {hasUnsavedChanges && (
+                <div className="mt-6 flex justify-start">
+                  <Button 
+                    onClick={saveChanges}
+                    variant="default"
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Save className="w-4 h-4" />
+                    حفظ التغييرات
+                  </Button>
+                </div>
+              )}
+              
+              {!hasUnsavedChanges && localStatement && (
+                <div className="mt-6 text-sm text-green-600 flex items-center gap-2">
+                  <Save className="w-4 h-4" />
+                  تم الحفظ
+                </div>
+              )}
             </Card>
 
             {/* Expense Management */}
