@@ -227,7 +227,8 @@ export class ExcelStorage implements IStorage {
       createdAt: new Date()
     };
     this.missions.set(id, mission);
-    this.saveMissionsToExcel();
+    // Disabled automatic Excel saving for better performance - only save on explicit export
+    // this.saveMissionsToExcel();
     return mission;
   }
 
@@ -244,14 +245,16 @@ export class ExcelStorage implements IStorage {
       statement: updates.statement !== undefined ? updates.statement : mission.statement
     };
     this.missions.set(id, updatedMission);
-    this.saveMissionsToExcel();
+    // Disabled automatic Excel saving for better performance - only save on explicit export
+    // this.saveMissionsToExcel();
     return updatedMission;
   }
 
   async deleteMission(id: string): Promise<boolean> {
     const deleted = this.missions.delete(id);
     if (deleted) {
-      this.saveMissionsToExcel();
+      // Disabled automatic Excel saving for better performance - only save on explicit export
+      // this.saveMissionsToExcel();
     }
     return deleted;
   }

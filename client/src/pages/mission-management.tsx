@@ -224,7 +224,7 @@ export default function MissionManagement() {
     
     debounceTimeoutRef.current = setTimeout(() => {
       updateActiveMission(updates);
-    }, 500); // Wait 500ms after user stops typing
+    }, 2000); // Wait 2 seconds after user stops typing
   }, [updateActiveMission]);
 
   // Mission details change handlers
