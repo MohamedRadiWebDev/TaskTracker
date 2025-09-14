@@ -45,6 +45,14 @@ export const insertBankSchema = createInsertSchema(banks).pick({
   name: true,
 });
 
+// Define explicit Zod schema for ExpenseItem
+const expenseItemSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  amount: z.number(),
+  banks: z.array(z.string())
+});
+
 export const insertMissionSchema = createInsertSchema(missions).pick({
   employeeCode: true,
   employeeName: true,
@@ -54,6 +62,8 @@ export const insertMissionSchema = createInsertSchema(missions).pick({
   statement: true,
   expenses: true,
   totalAmount: true,
+}).extend({
+  expenses: expenseItemSchema.array()
 });
 
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
