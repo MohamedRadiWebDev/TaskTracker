@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -13,7 +13,6 @@ import { Briefcase, Save, Trash2 } from "lucide-react";
 const initialMissionData: MissionData = {
   employee: null,
   missionDate: new Date().toISOString().split('T')[0],
-  bank: '',
   statement: '',
   expenses: [],
   timestamp: ''
@@ -22,6 +21,37 @@ const initialMissionData: MissionData = {
 export default function MissionManagement() {
   const { toast } = useToast();
   const [missionData, setMissionData] = useLocalStorage<MissionData>('missionData', initialMissionData);
+  
+  // Migration function to convert old data structure to new one
+  const migrateMissionData = (data: any): MissionData => {
+    if (!data) return initialMissionData;
+    
+    const migratedExpenses = data.expenses?.map((expense: any) => ({
+      ...expense,
+      banks: expense.banks || (expense.bank ? [expense.bank] : [])
+    })) || [];
+    
+    // Remove bank field from mission data
+    const { bank, ...restData } = data;
+    
+    return {
+      ...initialMissionData,
+      ...restData,
+      expenses: migratedExpenses
+    };
+  };
+  
+  // Apply migration if needed
+  useEffect(() => {
+    const needsMigration = missionData.expenses.some((expense: any) => 
+      expense.bank !== undefined || expense.banks === undefined
+    );
+    
+    if (needsMigration) {
+      const migratedData = migrateMissionData(missionData);
+      setMissionData(migratedData);
+    }
+  }, []);
   
   // Initialize counter based on existing expenses to avoid duplicate IDs
   const getInitialCounter = () => {
@@ -45,7 +75,7 @@ export default function MissionManagement() {
       id: `expense-${expenseCounter}`,
       type,
       amount: 0,
-      bank: ''
+      banks: []
     };
     
     updateMissionData({
@@ -98,8 +128,12 @@ export default function MissionManagement() {
     const bankTotals: Record<string, number> = {};
     
     missionData.expenses.forEach(expense => {
-      if (expense.bank && expense.amount > 0) {
-        bankTotals[expense.bank] = (bankTotals[expense.bank] || 0) + expense.amount;
+      if (expense.banks && expense.banks.length > 0 && expense.amount > 0) {
+        // Divide the expense amount equally among selected banks
+        const amountPerBank = expense.amount / expense.banks.length;
+        expense.banks.forEach(bank => {
+          bankTotals[bank] = (bankTotals[bank] || 0) + amountPerBank;
+        });
       }
     });
 
@@ -162,10 +196,8 @@ export default function MissionManagement() {
         <Card className="p-6 mb-8">
           <MissionDetails 
             missionDate={missionData.missionDate}
-            bank={missionData.bank}
             statement={missionData.statement}
             onMissionDateChange={(missionDate: string) => updateMissionData({ missionDate })}
-            onBankChange={(bank: string) => updateMissionData({ bank })}
             onStatementChange={(statement: string) => updateMissionData({ statement })}
           />
         </Card>

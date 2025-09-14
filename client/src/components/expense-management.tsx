@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Car, 
   Receipt, 
@@ -152,23 +153,45 @@ export default function ExpenseManagement({
               
               <div>
                 <Label className="block text-sm font-medium text-foreground mb-2">
-                  البنك المحدد
+                  البنوك المحددة
                 </Label>
-                <Select 
-                  value={expense.bank} 
-                  onValueChange={(value) => onUpdateExpense(expense.id, { bank: value })}
-                >
-                  <SelectTrigger data-testid={`select-bank-${expense.id}`}>
-                    <SelectValue placeholder="اختر البنك" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {banks.map((bank) => (
-                      <SelectItem key={bank.id} value={bank.name}>
-                        {bank.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3">
+                  {banks.map((bank) => {
+                    const isChecked = expense.banks ? expense.banks.includes(bank.name) : false;
+                    return (
+                      <div key={bank.id} className="flex items-center space-x-2 rtl:space-x-reverse">
+                        <Checkbox
+                          id={`bank-${expense.id}-${bank.id}`}
+                          checked={isChecked}
+                          onCheckedChange={(checked) => {
+                            const currentBanks = expense.banks || [];
+                            const updatedBanks = checked
+                              ? [...currentBanks, bank.name]
+                              : currentBanks.filter(b => b !== bank.name);
+                            onUpdateExpense(expense.id, { banks: updatedBanks });
+                          }}
+                          data-testid={`checkbox-bank-${expense.id}-${bank.id}`}
+                        />
+                        <Label 
+                          htmlFor={`bank-${expense.id}-${bank.id}`} 
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {bank.name}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                  {banks.length === 0 && (
+                    <div className="text-sm text-muted-foreground text-center py-2">
+                      لا توجد بنوك متاحة
+                    </div>
+                  )}
+                </div>
+                {expense.banks && expense.banks.length > 0 && (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {expense.banks.length} بنك محدد: {expense.banks.join('، ')}
+                  </div>
+                )}
               </div>
             </div>
           </Card>

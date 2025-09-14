@@ -2,7 +2,7 @@ export interface ExpenseItem {
   id: string;
   type: string;
   amount: number;
-  bank: string;
+  banks: string[];
 }
 
 export interface MissionData {
@@ -12,7 +12,6 @@ export interface MissionData {
     branch: string;
   } | null;
   missionDate: string;
-  bank: string;
   statement: string;
   expenses: ExpenseItem[];
   timestamp: string;
