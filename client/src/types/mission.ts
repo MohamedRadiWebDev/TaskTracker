@@ -1,27 +1,9 @@
-export interface ExpenseItem {
-  id: string;
-  type: string;
-  amount: number;
-  banks: string[];
-}
+// Re-export types from shared schema for consistency
+export type { ExpenseItem, Mission, InsertMission, Employee, Bank } from "@shared/schema";
 
-export interface MissionData {
-  id: string;
-  title: string;
-  employee: {
-    code: number;
-    name: string;
-    branch: string;
-  } | null;
-  missionDate: string;
-  statement: string;
-  expenses: ExpenseItem[];
-  timestamp: string;
-  createdAt: string;
-}
-
+// Additional frontend-specific types
 export interface MissionsCollection {
-  missions: MissionData[];
+  missions: Mission[];
   activeMissionId: string | null;
 }
 

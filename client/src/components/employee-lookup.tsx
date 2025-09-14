@@ -7,8 +7,8 @@ import { UserCircle, AlertCircle, Loader2 } from "lucide-react";
 import type { Employee } from "@shared/schema";
 
 interface EmployeeLookupProps {
-  employee: { code: number; name: string; branch: string } | null;
-  onEmployeeChange: (employee: { code: number; name: string; branch: string } | null) => void;
+  employee: Pick<Employee, 'code' | 'name' | 'branch'> | null;
+  onEmployeeChange: (employee: Pick<Employee, 'code' | 'name' | 'branch'> | null) => void;
 }
 
 export default function EmployeeLookup({ employee, onEmployeeChange }: EmployeeLookupProps) {

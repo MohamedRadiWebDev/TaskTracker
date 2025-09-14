@@ -32,7 +32,7 @@ export interface ExpenseItem {
   id: string;
   type: string;
   amount: number;
-  bank: string;
+  banks: string[];
 }
 
 export const insertEmployeeSchema = createInsertSchema(employees).pick({

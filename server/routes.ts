@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertMissionSchema } from "@shared/schema";
+import multer from "multer";
+import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all employees
@@ -102,6 +104,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete mission" });
+    }
+  });
+
+  // Export missions to Excel
+  app.get("/api/missions/export", async (req, res) => {
+    try {
+      const filePath = await storage.exportToExcel();
+      const fileName = path.basename(filePath);
+      
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.download(filePath, fileName);
+    } catch (error) {
+      console.error('Export error:', error);
+      res.status(500).json({ error: "Failed to export missions to Excel" });
+    }
+  });
+
+  // Setup multer for file uploads
+  const upload = multer({ dest: 'uploads/' });
+
+  // Import missions from Excel
+  app.post("/api/missions/import", upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      await storage.importFromExcel(req.file.path);
+      res.json({ message: "Missions imported successfully" });
+    } catch (error) {
+      console.error('Import error:', error);
+      res.status(500).json({ error: "Failed to import missions from Excel" });
     }
   });
 
