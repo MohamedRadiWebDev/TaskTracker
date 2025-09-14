@@ -83,10 +83,7 @@ export default function MissionManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/missions'] });
-      toast({
-        title: "تم حفظ التغييرات",
-        description: "تم حفظ تحديثات المأمورية بنجاح",
-      });
+      // تم إزالة إشعار "تم حفظ التغييرات" لتحسين تجربة الاستخدام
     },
     onError: (error) => {
       toast({
@@ -462,34 +459,32 @@ export default function MissionManagement() {
         <div className="mb-6">
           <div className="flex gap-2 overflow-x-auto pb-2">
             {missions.map((mission: Mission, index: number) => (
-              <Button
-                key={mission.id}
-                variant={activeMissionId === mission.id ? "default" : "outline"}
-                size="sm"
-                onClick={() => selectMission(mission.id)}
-                className="shrink-0"
-                data-testid={`tab-mission-${mission.id}`}
-              >
-                <span className="ml-2">مأمورية {index + 1}</span>
-                {mission.employeeName && (
-                  <span className="text-xs opacity-75">({mission.employeeName})</span>
-                )}
+              <div key={mission.id} className="flex items-center gap-1">
+                <Button
+                  variant={activeMissionId === mission.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => selectMission(mission.id)}
+                  className="shrink-0"
+                  data-testid={`tab-mission-${mission.id}`}
+                >
+                  <span className="ml-2">مأمورية {index + 1}</span>
+                  {mission.employeeName && (
+                    <span className="text-xs opacity-75">({mission.employeeName})</span>
+                  )}
+                </Button>
                 {missions.length > 1 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteMission(mission.id);
-                    }}
-                    className="mr-2 h-4 w-4 p-0 hover:bg-destructive/20"
+                    onClick={() => deleteMission(mission.id)}
+                    className="h-8 w-8 p-0 hover:bg-destructive/20"
                     disabled={deleteMissionMutation.isPending}
                     data-testid={`button-delete-${mission.id}`}
                   >
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 )}
-              </Button>
+              </div>
             ))}
           </div>
         </div>
