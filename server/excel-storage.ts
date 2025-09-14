@@ -401,6 +401,7 @@ export class ExcelStorage implements IStorage {
           const bankExpenses = expensesByBank.get(bank)!;
           
           // Calculate amounts for each expense type for this bank
+          // Important: Divide by number of banks to correctly distribute amounts
           const transportationAmount = bankExpenses
             .filter(exp => {
               const englishType = Object.keys(expenseTypeMapping).find(englishKey => 
@@ -408,7 +409,11 @@ export class ExcelStorage implements IStorage {
               );
               return exp.type === englishType;
             })
-            .reduce((sum, exp) => sum + (parseFloat(String(exp.amount || 0)) || 0), 0);
+            .reduce((sum, exp) => {
+              const amount = parseFloat(String(exp.amount || 0)) || 0;
+              const banksCount = exp.banks?.length || 1;
+              return sum + (amount / banksCount);
+            }, 0);
             
           const feesAmount = bankExpenses
             .filter(exp => {
@@ -417,7 +422,11 @@ export class ExcelStorage implements IStorage {
               );
               return exp.type === englishType;
             })
-            .reduce((sum, exp) => sum + (parseFloat(String(exp.amount || 0)) || 0), 0);
+            .reduce((sum, exp) => {
+              const amount = parseFloat(String(exp.amount || 0)) || 0;
+              const banksCount = exp.banks?.length || 1;
+              return sum + (amount / banksCount);
+            }, 0);
             
           const tipsAmount = bankExpenses
             .filter(exp => {
@@ -426,7 +435,11 @@ export class ExcelStorage implements IStorage {
               );
               return exp.type === englishType;
             })
-            .reduce((sum, exp) => sum + (parseFloat(String(exp.amount || 0)) || 0), 0);
+            .reduce((sum, exp) => {
+              const amount = parseFloat(String(exp.amount || 0)) || 0;
+              const banksCount = exp.banks?.length || 1;
+              return sum + (amount / banksCount);
+            }, 0);
             
           const officeSuppliesAmount = bankExpenses
             .filter(exp => {
@@ -435,7 +448,11 @@ export class ExcelStorage implements IStorage {
               );
               return exp.type === englishType;
             })
-            .reduce((sum, exp) => sum + (parseFloat(String(exp.amount || 0)) || 0), 0);
+            .reduce((sum, exp) => {
+              const amount = parseFloat(String(exp.amount || 0)) || 0;
+              const banksCount = exp.banks?.length || 1;
+              return sum + (amount / banksCount);
+            }, 0);
             
           const hospitalityAmount = bankExpenses
             .filter(exp => {
@@ -444,7 +461,11 @@ export class ExcelStorage implements IStorage {
               );
               return exp.type === englishType;
             })
-            .reduce((sum, exp) => sum + (parseFloat(String(exp.amount || 0)) || 0), 0);
+            .reduce((sum, exp) => {
+              const amount = parseFloat(String(exp.amount || 0)) || 0;
+              const banksCount = exp.banks?.length || 1;
+              return sum + (amount / banksCount);
+            }, 0);
           
           // Calculate bank total
           const bankTotal = transportationAmount + feesAmount + tipsAmount + officeSuppliesAmount + hospitalityAmount;
