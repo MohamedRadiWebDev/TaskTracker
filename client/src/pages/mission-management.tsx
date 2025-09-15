@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import EmployeeLookup from "@/components/employee-lookup";
-import MissionDetails from "@/components/mission-details";
-import ExpenseManagement from "@/components/expense-management";
-import BankDistribution from "@/components/bank-distribution";
-import { useMissions } from "@/hooks/use-missions";
+import { Card } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { useToast } from "../hooks/use-toast";
+import EmployeeLookup from "../components/employee-lookup";
+import MissionDetails from "../components/mission-details";
+import ExpenseManagement from "../components/expense-management";
+import BankDistribution from "../components/bank-distribution";
+import { useMissions } from "../hooks/use-missions";
 import type { Mission, ExpenseItem, InsertMission, Employee } from "../types/schema";
 
 interface Totals {
@@ -234,7 +234,7 @@ export default function MissionManagement() {
   // Export to Excel
   const exportToExcel = async () => {
     try {
-      const { exportMissionsToExcel } = await import('@/lib/excelUtils');
+      const { exportMissionsToExcel } = await import('../lib/excelUtils');
       exportMissionsToExcel(missions);
       
       toast({
@@ -257,7 +257,7 @@ export default function MissionManagement() {
     if (!file) return;
 
     try {
-      const { importMissionsFromExcel } = await import('@/lib/excelUtils');
+      const { importMissionsFromExcel } = await import('../lib/excelUtils');
       const result = await importMissionsFromExcel(file);
       
       if (result.success) {

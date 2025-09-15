@@ -1,9 +1,10 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import React from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Card } from "./ui/card";
+import { Checkbox } from "./ui/checkbox";
 import { 
   Car, 
   Receipt, 
@@ -14,7 +15,7 @@ import {
   Trash2,
   Banknote
 } from "lucide-react";
-import { useBanks } from "@/hooks/use-missions";
+import { useBanks } from "../hooks/use-missions";
 import type { ExpenseItem, Bank } from "../types/schema";
 
 // Define expense types locally since we're removing the types file
