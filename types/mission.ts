@@ -1,9 +1,9 @@
-// Re-export types from shared schema for consistency
-export type { ExpenseItem, Mission, InsertMission, Employee, Bank } from "@shared/schema";
+// Re-export types from local schema for consistency
+export type { ExpenseItem, Mission, InsertMission, Employee, Bank } from "./schema";
 
 // Additional frontend-specific types
 
-import type { Mission } from "@shared/schema";
+import type { Mission } from "./schema";
 
 export interface MissionsCollection {
   missions: Mission[];

@@ -15,8 +15,7 @@ import {
   Banknote
 } from "lucide-react";
 import { useBanks } from "@/hooks/use-missions";
-import type { ExpenseItem } from "@shared/schema";
-import type { Bank } from "@shared/schema";
+import type { ExpenseItem, Bank } from "../types/schema";
 
 // Define expense types locally since we're removing the types file
 const expenseTypes = {

@@ -8,7 +8,7 @@ import MissionDetails from "@/components/mission-details";
 import ExpenseManagement from "@/components/expense-management";
 import BankDistribution from "@/components/bank-distribution";
 import { useMissions } from "@/hooks/use-missions";
-import type { Mission, ExpenseItem, InsertMission, Employee } from "@shared/schema";
+import type { Mission, ExpenseItem, InsertMission, Employee } from "../types/schema";
 
 interface Totals {
   totalAmount: number;

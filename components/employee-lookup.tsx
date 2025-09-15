@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UserCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useEmployees } from "@/hooks/use-missions";
-import type { Employee } from "@shared/schema";
+import type { Employee } from "../types/schema";
 
 interface EmployeeLookupProps {
   employee: Pick<Employee, 'code' | 'name' | 'branch'> | null;
