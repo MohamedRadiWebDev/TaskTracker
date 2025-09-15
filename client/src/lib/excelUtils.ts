@@ -50,12 +50,15 @@ export function exportMissionsToExcel(missions: Mission[]): void {
     };
 
 
-    // Helper to get expense amount by type from mission
+    // Helper to get expense amount by type from mission (raw amounts like website)
     const getExpenseByType = (mission: Mission, expenseType: string): number => {
       if (!mission.expenses) return 0;
       return mission.expenses
         .filter(expense => expense.type === expenseType)
-        .reduce((sum, expense) => sum + expense.amount, 0);
+        .reduce((sum, expense) => {
+          const amount = parseFloat(String(expense.amount || 0)) || 0;
+          return sum + amount;
+        }, 0);
     };
 
     // Helper to get primary bank for a mission
@@ -78,10 +81,13 @@ export function exportMissionsToExcel(missions: Mission[]): void {
       return 'لا يوجد بنك';
     };
 
-    // Helper to get mission total
+    // Helper to get mission total (raw amounts like website)
     const getMissionTotal = (mission: Mission): number => {
       if (!mission.expenses) return 0;
-      return mission.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+      return mission.expenses.reduce((sum, expense) => {
+        const amount = parseFloat(String(expense.amount || 0)) || 0;
+        return sum + amount;
+      }, 0);
     };
 
     // Prepare export data in the required format
