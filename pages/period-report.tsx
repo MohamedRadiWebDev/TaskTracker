@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from '../components/ui/button';
+import { Card } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Calendar, Download, FileText, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { useMissions } from '@/hooks/use-missions';
+import { useToast } from '../hooks/use-toast';
+import { useMissions } from '../hooks/use-missions';
 import * as XLSX from 'xlsx';
 
 export default function PeriodReport() {

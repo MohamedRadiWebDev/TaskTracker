@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { Mission, ExpenseItem } from '@shared/schema';
+import { Mission, ExpenseItem } from '../types/schema';
 import { getMissions, setMissions } from './localStorage';
 
 export interface ExcelImportResult {

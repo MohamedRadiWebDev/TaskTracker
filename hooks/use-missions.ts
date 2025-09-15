@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from './use-toast';
 import { 
   getMissions, 
   createMission, 
@@ -8,8 +8,8 @@ import {
   getEmployees,
   getBanks,
   getEmployeeByCode
-} from '@/lib/localStorage';
-import type { Mission, InsertMission, Employee, Bank } from '@shared/schema';
+} from '../lib/localStorage';
+import type { Mission, InsertMission, Employee, Bank } from '../types/schema';
 
 export function useMissions() {
   const { toast } = useToast();

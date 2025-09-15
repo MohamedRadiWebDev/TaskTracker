@@ -1,6 +1,6 @@
-import type { Mission, InsertMission, ExpenseItem, Employee, Bank } from '@shared/schema';
-import employeesData from '@/data/employees.json';
-import banksData from '@/data/banks.json';
+import type { Mission, InsertMission, ExpenseItem, Employee, Bank } from '../types/schema';
+import employeesData from '../data/employees.json';
+import banksData from '../data/banks.json';
 
 // Browser-compatible UUID generator
 function generateUUID(): string {
