@@ -2,6 +2,9 @@
 export type { ExpenseItem, Mission, InsertMission, Employee, Bank } from "@shared/schema";
 
 // Additional frontend-specific types
+
+import type { Mission } from "@shared/schema";
+
 export interface MissionsCollection {
   missions: Mission[];
   activeMissionId: string | null;

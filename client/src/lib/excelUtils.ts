@@ -24,49 +24,168 @@ export function exportMissionsToExcel(missions: Mission[]): void {
     // Create workbook
     const workbook = XLSX.utils.book_new();
     
-    // Prepare missions data for export
-    const missionRows = missions.map(mission => ({
-      'رقم المأمورية': sanitizeForExcel(mission.id),
-      'اسم الموظف': sanitizeForExcel(mission.employeeName),
-      'كود الموظف': mission.employeeCode,
-      'الفرع': sanitizeForExcel(mission.employeeBranch),
-      'تاريخ المأمورية': mission.missionDate,
-      'البنك': sanitizeForExcel(mission.bank || ''),
-      'البيان': sanitizeForExcel(mission.statement || ''),
-      'إجمالي المصروفات': mission.totalAmount,
-      'عدد البنود': mission.expenses?.length || 0,
-      'تاريخ الإنشاء': mission.createdAt ? new Date(mission.createdAt).toLocaleDateString('ar-EG') : ''
-    }));
-
-    // Create missions worksheet
-    const missionsWs = XLSX.utils.json_to_sheet(missionRows);
-    XLSX.utils.book_append_sheet(workbook, missionsWs, 'المأموريات');
-
-    // Prepare expenses data
-    const expenseRows: any[] = [];
+    // Group missions by employee and date
+    const employeeGroups = new Map<string, { employee: { name: string; code: number; branch: string; }, missions: Mission[] }>();
+    
     missions.forEach(mission => {
-      if (mission.expenses && mission.expenses.length > 0) {
-        mission.expenses.forEach((expense: ExpenseItem) => {
-          expenseRows.push({
-            'رقم المأمورية': sanitizeForExcel(mission.id),
-            'اسم الموظف': sanitizeForExcel(mission.employeeName),
-            'نوع المصروف': sanitizeForExcel(expense.type),
-            'المبلغ': expense.amount,
-            'البنوك': sanitizeForExcel(expense.banks.join(', '))
-          });
+      const key = `${mission.employeeCode}-${mission.missionDate}`;
+      if (!employeeGroups.has(key)) {
+        employeeGroups.set(key, {
+          employee: {
+            name: mission.employeeName,
+            code: mission.employeeCode,
+            branch: mission.employeeBranch
+          },
+          missions: []
         });
       }
+      employeeGroups.get(key)!.missions.push(mission);
     });
 
-    // Create expenses worksheet if there are expenses
-    if (expenseRows.length > 0) {
-      const expensesWs = XLSX.utils.json_to_sheet(expenseRows);
-      XLSX.utils.book_append_sheet(workbook, expensesWs, 'المصروفات');
+    // Helper to get Arabic day name
+    const getArabicDayName = (dateString: string): string => {
+      const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      const date = new Date(dateString);
+      return days[date.getDay()];
+    };
+
+
+    // Helper to get expense amount by type from mission
+    const getExpenseByType = (mission: Mission, expenseType: string): number => {
+      if (!mission.expenses) return 0;
+      return mission.expenses
+        .filter(expense => expense.type === expenseType)
+        .reduce((sum, expense) => sum + expense.amount, 0);
+    };
+
+    // Helper to get primary bank for a mission
+    const getMissionBank = (mission: Mission): string => {
+      // Prefer mission.bank if set
+      if (mission.bank && mission.bank.trim() !== '') {
+        return mission.bank.trim();
+      }
+      
+      // Otherwise get first unique bank from expenses
+      if (!mission.expenses) return 'لا يوجد بنك';
+      const allBanks = mission.expenses.flatMap(expense => expense.banks);
+      const uniqueBanks = Array.from(new Set(allBanks)).filter(bank => bank && bank.trim() !== '');
+      
+      if (uniqueBanks.length > 0) {
+        // If multiple banks, join them with ' | '
+        return uniqueBanks.length > 1 ? uniqueBanks.join(' | ') : uniqueBanks[0];
+      }
+      
+      return 'لا يوجد بنك';
+    };
+
+    // Helper to get mission total
+    const getMissionTotal = (mission: Mission): number => {
+      if (!mission.expenses) return 0;
+      return mission.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    };
+
+    // Prepare export data in the required format
+    const exportRows: any[] = [];
+    
+    employeeGroups.forEach((group, key) => {
+      const { employee, missions: employeeMissions } = group;
+      const firstMission = employeeMissions[0];
+      
+      // Sort missions by bank to get consistent ordering
+      const sortedMissions = employeeMissions.sort((a, b) => {
+        const bankA = getMissionBank(a);
+        const bankB = getMissionBank(b);
+        return bankA.localeCompare(bankB);
+      });
+
+      // Create row with basic employee info
+      const row: any = {
+        'اسم الموظف': sanitizeForExcel(employee.name),
+        'الكود': employee.code,
+        'الفرع': sanitizeForExcel(employee.branch),
+        'التاريخ': firstMission.missionDate,
+        'اليوم': getArabicDayName(firstMission.missionDate),
+        'بيان': sanitizeForExcel(firstMission.statement || '')
+      };
+
+      // Add up to 4 missions
+      let grandTotal = 0;
+      for (let i = 0; i < 4; i++) {
+        const mission = sortedMissions[i];
+        const missionNum = i + 1;
+        
+        if (mission) {
+          const bankName = getMissionBank(mission);
+          
+          const transportation = getExpenseByType(mission, 'transportation');
+          const fees = getExpenseByType(mission, 'fees');
+          const tips = getExpenseByType(mission, 'tips');
+          const officeSupplies = getExpenseByType(mission, 'office-supplies');
+          const hospitality = getExpenseByType(mission, 'hospitality');
+          const missionTotal = getMissionTotal(mission);
+          
+          row[`بنك / شركة ( مامورية${missionNum})`] = sanitizeForExcel(bankName);
+          row[`انتقالات${missionNum}`] = transportation;
+          row[`رسوم${missionNum}`] = fees;
+          row[`اكراميات${missionNum}`] = tips;
+          row[`أدوات مكتبية${missionNum}`] = officeSupplies;
+          row[`ضيافة${missionNum}`] = hospitality;
+          row[`الاجمالى${missionNum}`] = missionTotal;
+          
+          grandTotal += missionTotal;
+        } else {
+          // Empty mission slot
+          row[`بنك / شركة ( مامورية${missionNum})`] = 'لا يوجد مامورية';
+          row[`انتقالات${missionNum}`] = 0;
+          row[`رسوم${missionNum}`] = 0;
+          row[`اكراميات${missionNum}`] = 0;
+          row[`أدوات مكتبية${missionNum}`] = 0;
+          row[`ضيافة${missionNum}`] = 0;
+          row[`الاجمالى${missionNum}`] = 0;
+        }
+      }
+      
+      // Add grand total
+      row['الاجمالى'] = grandTotal;
+      
+      exportRows.push(row);
+    });
+
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    
+    // Set column widths for better readability
+    const columnWidths = [
+      { wch: 25 }, // اسم الموظف
+      { wch: 8 },  // الكود
+      { wch: 15 }, // فرع
+      { wch: 12 }, // التاريخ
+      { wch: 10 }, // اليوم
+      { wch: 20 }, // بيان
+    ];
+    
+    // Add widths for mission columns (4 missions × 7 columns each)
+    for (let i = 0; i < 4; i++) {
+      columnWidths.push(
+        { wch: 20 }, // بنك / شركة
+        { wch: 10 }, // انتقالات
+        { wch: 8 },  // رسوم
+        { wch: 10 }, // اكراميات
+        { wch: 12 }, // أدوات مكتبية
+        { wch: 8 },  // ضيافة
+        { wch: 10 }  // الاجمالى
+      );
     }
+    columnWidths.push({ wch: 12 }); // الاجمالى النهائي
+    
+    worksheet['!cols'] = columnWidths;
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'تقرير المأموريات');
 
     // Generate Excel file and download
     const today = new Date().toISOString().split('T')[0];
-    const filename = `missions-export-${today}.xlsx`;
+    const filename = `missions-detailed-export-${today}.xlsx`;
     
     XLSX.writeFile(workbook, filename);
   } catch (error) {
