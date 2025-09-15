@@ -19,64 +19,77 @@ function sanitizeForExcel(value: any): any {
   return value;
 }
 
+// Expense type mapping for normalization
+const expenseTypeMapping: Record<string, string> = {
+  // English to normalized
+  'transportation': 'transportation',
+  'transport': 'transportation', 
+  'fees': 'fees',
+  'tips': 'tips',
+  'tip': 'tips',
+  'office-supplies': 'office-supplies',
+  'hospitality': 'hospitality',
+  // Arabic to normalized
+  'انتقالات': 'transportation',
+  'رسوم': 'fees',
+  'اكراميات': 'tips',
+  'إكراميات': 'tips',
+  'أدوات مكتبية': 'office-supplies',
+  'ضيافة': 'hospitality'
+};
+
+// Function to normalize expense type
+function normalizeExpenseType(type: string): string {
+  return expenseTypeMapping[type] || type;
+}
+
+// Helper to get Arabic day name
+const getArabicDayName = (dateString: string): string => {
+  const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const date = new Date(dateString);
+  return days[date.getDay()];
+};
+
 export function exportMissionsToExcel(missions: Mission[]): void {
   try {
     // Create workbook
     const workbook = XLSX.utils.book_new();
     
-    // Create bank missions - each bank becomes a separate mission entry
-    interface BankMission {
-      bankName: string;
-      transportation: number;
-      fees: number;
-      tips: number;
-      officeSupplies: number;
-      hospitality: number;
-      total: number;
-    }
-
-    // Group by employee and date, then expand by banks
-    const employeeGroups = new Map<string, { 
-      employee: { name: string; code: number; branch: string; date: string; statement: string; }, 
-      bankMissions: BankMission[] 
-    }>();
+    // Process each mission individually - one row per mission
+    const exportRows: any[] = [];
     
     missions.forEach(mission => {
-      const key = `${mission.employeeCode}-${mission.missionDate}`;
-      
-      if (!employeeGroups.has(key)) {
-        employeeGroups.set(key, {
-          employee: {
-            name: mission.employeeName,
-            code: mission.employeeCode,
-            branch: mission.employeeBranch,
-            date: mission.missionDate,
-            statement: mission.statement || ''
-          },
-          bankMissions: []
-        });
-      }
-      
       // Get all unique banks from mission expenses
       const allBanks = new Set<string>();
-      if (mission.expenses) {
+      
+      if (mission.expenses && mission.expenses.length > 0) {
         mission.expenses.forEach(expense => {
-          expense.banks.forEach(bank => {
-            if (bank && bank.trim() !== '') {
-              allBanks.add(bank.trim());
-            }
-          });
+          if (expense.banks && expense.banks.length > 0) {
+            expense.banks.forEach(bank => {
+              if (bank && bank.trim() !== '') {
+                allBanks.add(bank.trim());
+              }
+            });
+          } else {
+            // If expense has no banks, use mission bank or default
+            const fallbackBank = mission.bank && mission.bank.trim() !== '' ? mission.bank.trim() : 'غير محدد';
+            allBanks.add(fallbackBank);
+          }
         });
+      } else {
+        // If mission has no expenses but has a bank, still include it
+        if (mission.bank && mission.bank.trim() !== '') {
+          allBanks.add(mission.bank.trim());
+        } else {
+          allBanks.add('غير محدد');
+        }
       }
       
-      // If mission has a primary bank, add it
-      if (mission.bank && mission.bank.trim() !== '') {
-        allBanks.add(mission.bank.trim());
-      }
+      // Create bank missions for each bank with calculated amounts
+      const bankMissions: any[] = [];
       
-      // Create bank missions for each bank
       Array.from(allBanks).forEach(bankName => {
-        const bankMission: BankMission = {
+        const bankMission = {
           bankName,
           transportation: 0,
           fees: 0,
@@ -89,10 +102,28 @@ export function exportMissionsToExcel(missions: Mission[]): void {
         // Calculate distributed amounts for this bank
         if (mission.expenses) {
           mission.expenses.forEach(expense => {
-            if (expense.banks.includes(bankName)) {
-              const distributedAmount = expense.amount / expense.banks.length;
+            let shouldIncludeExpense = false;
+            let distributionFactor = 1;
+            
+            if (expense.banks && expense.banks.length > 0) {
+              if (expense.banks.includes(bankName)) {
+                shouldIncludeExpense = true;
+                distributionFactor = expense.banks.length;
+              }
+            } else {
+              // If expense has no banks, assign it to the mission bank or 'غير محدد'
+              const fallbackBank = mission.bank && mission.bank.trim() !== '' ? mission.bank.trim() : 'غير محدد';
+              if (bankName === fallbackBank) {
+                shouldIncludeExpense = true;
+                distributionFactor = 1;
+              }
+            }
+            
+            if (shouldIncludeExpense) {
+              const distributedAmount = expense.amount / distributionFactor;
+              const normalizedType = normalizeExpenseType(expense.type);
               
-              switch (expense.type) {
+              switch (normalizedType) {
                 case 'transportation':
                   bankMission.transportation += distributedAmount;
                   break;
@@ -116,52 +147,26 @@ export function exportMissionsToExcel(missions: Mission[]): void {
         // Calculate total for this bank mission
         bankMission.total = bankMission.transportation + bankMission.fees + bankMission.tips + bankMission.officeSupplies + bankMission.hospitality;
         
-        // Always add bank mission to show all banks even with zero amounts
-        employeeGroups.get(key)!.bankMissions.push(bankMission);
+        bankMissions.push(bankMission);
       });
-      
-      // If no banks found, create a default entry
-      if (allBanks.size === 0) {
-        employeeGroups.get(key)!.bankMissions.push({
-          bankName: 'لا يوجد بنك',
-          transportation: 0,
-          fees: 0,
-          tips: 0,
-          officeSupplies: 0,
-          hospitality: 0,
-          total: 0
-        });
-      }
-    });
 
-    // Helper to get Arabic day name
-    const getArabicDayName = (dateString: string): string => {
-      const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-      const date = new Date(dateString);
-      return days[date.getDay()];
-    };
-
-    // Prepare export data in the required format
-    const exportRows: any[] = [];
-    
-    employeeGroups.forEach((group, key) => {
-      const { employee, bankMissions } = group;
-      
       // Sort bank missions by bank name for consistent ordering
       const sortedBankMissions = bankMissions.sort((a, b) => a.bankName.localeCompare(b.bankName));
 
       // Create row with basic employee info
       const row: any = {
-        'اسم الموظف': sanitizeForExcel(employee.name),
-        'الكود': employee.code,
-        'الفرع': sanitizeForExcel(employee.branch),
-        'التاريخ': employee.date,
-        'اليوم': getArabicDayName(employee.date),
-        'البيان': sanitizeForExcel(employee.statement)
+        'اسم الموظف': sanitizeForExcel(mission.employeeName),
+        'الكود': mission.employeeCode,
+        'فرع': sanitizeForExcel(mission.employeeBranch),
+        'التاريخ': mission.missionDate,
+        'اليوم': getArabicDayName(mission.missionDate),
+        'بيـــــــــــــــــــــــان': sanitizeForExcel(mission.statement || '')
       };
 
-      // Add up to 4 bank missions
-      let grandTotal = 0;
+      // Calculate grand total from ALL bank missions
+      let grandTotal = sortedBankMissions.reduce((sum, bankMission) => sum + bankMission.total, 0);
+      
+      // Add up to 4 bank missions to display columns - distribute banks across the sheet
       for (let i = 0; i < 4; i++) {
         const bankMission = sortedBankMissions[i];
         const missionNum = i + 1;
@@ -174,8 +179,6 @@ export function exportMissionsToExcel(missions: Mission[]): void {
           row[`أدوات مكتبية${missionNum}`] = Math.round(bankMission.officeSupplies * 100) / 100;
           row[`ضيافة${missionNum}`] = Math.round(bankMission.hospitality * 100) / 100;
           row[`الاجمالى${missionNum}`] = Math.round(bankMission.total * 100) / 100;
-          
-          grandTotal += bankMission.total;
         } else {
           // Empty mission slot
           row[`بنك / شركة ( مامورية${missionNum})`] = 'لا يوجد مامورية';
@@ -194,17 +197,36 @@ export function exportMissionsToExcel(missions: Mission[]): void {
       exportRows.push(row);
     });
 
-    // Create worksheet
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    // Define fixed column headers to ensure consistent ordering
+    const headers = [
+      'اسم الموظف', 'الكود', 'فرع', 'التاريخ', 'اليوم', 'بيـــــــــــــــــــــــان'
+    ];
+    
+    // Add headers for 4 missions
+    for (let i = 1; i <= 4; i++) {
+      headers.push(
+        `بنك / شركة ( مامورية${i})`,
+        `انتقالات${i}`,
+        `رسوم${i}`,
+        `اكراميات${i}`,
+        `أدوات مكتبية${i}`,
+        `ضيافة${i}`,
+        `الاجمالى${i}`
+      );
+    }
+    headers.push('الاجمالى');
+    
+    // Create worksheet with fixed headers
+    const worksheet = XLSX.utils.json_to_sheet(exportRows, { header: headers });
     
     // Set column widths for better readability
     const columnWidths = [
-      { wch: 25 }, // اسم الموظف
+      { wch: 30 }, // اسم الموظف
       { wch: 8 },  // الكود
-      { wch: 15 }, // الفرع
+      { wch: 15 }, // فرع
       { wch: 12 }, // التاريخ
       { wch: 10 }, // اليوم
-      { wch: 20 }, // بيان
+      { wch: 25 }, // بيان
     ];
     
     // Add widths for mission columns (4 missions × 7 columns each)

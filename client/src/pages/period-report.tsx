@@ -56,62 +56,167 @@ export default function PeriodReport() {
       // Generate Excel report
       const workbook = XLSX.utils.book_new();
       
-      // Summary by employee
-      const summaryByEmployee: Record<string, { name: string; branch: string; total: number; count: number }> = {};
-      const expensesByBank: Record<string, number> = {};
-      const expensesByType: Record<string, number> = {};
+      // Expense type mapping for normalization
+      const expenseTypeMapping: Record<string, string> = {
+        // English to normalized
+        'transportation': 'transportation',
+        'transport': 'transportation', 
+        'fees': 'fees',
+        'tips': 'tips',
+        'tip': 'tips',
+        'office-supplies': 'office-supplies',
+        'hospitality': 'hospitality',
+        // Arabic to normalized
+        'انتقالات': 'transportation',
+        'رسوم': 'fees',
+        'اكراميات': 'tips',
+        'إكراميات': 'tips',
+        'أدوات مكتبية': 'office-supplies',
+        'ضيافة': 'hospitality'
+      };
+      
+      // Function to normalize expense type
+      const normalizeExpenseType = (type: string): string => {
+        return expenseTypeMapping[type] || type;
+      };
+      
+      // Create employee-bank combinations
+      const employeeBankData: Record<string, {
+        employeeName: string;
+        employeeCode: number;
+        employeeBranch: string;
+        bankName: string;
+        transportation: number;
+        fees: number;
+        tips: number;
+        officeSupplies: number;
+        hospitality: number;
+      }> = {};
 
       filteredMissions.forEach(mission => {
-        const key = `${mission.employeeCode}-${mission.employeeName}`;
-        if (!summaryByEmployee[key]) {
-          summaryByEmployee[key] = {
-            name: mission.employeeName,
-            branch: mission.employeeBranch,
-            total: 0,
-            count: 0
-          };
-        }
-        summaryByEmployee[key].total += parseFloat(mission.totalAmount);
-        summaryByEmployee[key].count += 1;
-
-        // Aggregate expenses by bank and type
-        mission.expenses.forEach(expense => {
-          expense.banks.forEach(bank => {
-            const amountPerBank = expense.amount / expense.banks.length;
-            expensesByBank[bank] = (expensesByBank[bank] || 0) + amountPerBank;
+        // Get all unique banks from mission expenses
+        const allBanks = new Set<string>();
+        
+        if (mission.expenses && mission.expenses.length > 0) {
+          mission.expenses.forEach(expense => {
+            if (expense.banks && expense.banks.length > 0) {
+              expense.banks.forEach(bank => {
+                if (bank && bank.trim() !== '') {
+                  allBanks.add(bank.trim());
+                }
+              });
+            } else {
+              // If expense has no banks, use mission bank or default
+              const fallbackBank = mission.bank && mission.bank.trim() !== '' ? mission.bank.trim() : 'غير محدد';
+              allBanks.add(fallbackBank);
+            }
           });
-          expensesByType[expense.type] = (expensesByType[expense.type] || 0) + expense.amount;
+        } else {
+          // If mission has no expenses but has a bank, still include it
+          if (mission.bank && mission.bank.trim() !== '') {
+            allBanks.add(mission.bank.trim());
+          } else {
+            allBanks.add('غير محدد');
+          }
+        }
+        
+        // Process each bank for this mission
+        Array.from(allBanks).forEach(bankName => {
+          const key = `${mission.employeeCode}-${bankName}`;
+          
+          if (!employeeBankData[key]) {
+            employeeBankData[key] = {
+              employeeName: mission.employeeName,
+              employeeCode: mission.employeeCode,
+              employeeBranch: mission.employeeBranch,
+              bankName: bankName,
+              transportation: 0,
+              fees: 0,
+              tips: 0,
+              officeSupplies: 0,
+              hospitality: 0
+            };
+          }
+          
+          // Calculate distributed amounts for this bank
+          if (mission.expenses) {
+            mission.expenses.forEach(expense => {
+              let shouldIncludeExpense = false;
+              let distributionFactor = 1;
+              
+              if (expense.banks && expense.banks.length > 0) {
+                if (expense.banks.includes(bankName)) {
+                  shouldIncludeExpense = true;
+                  distributionFactor = expense.banks.length;
+                }
+              } else {
+                // If expense has no banks, assign it to the mission bank or 'غير محدد'
+                const fallbackBank = mission.bank && mission.bank.trim() !== '' ? mission.bank.trim() : 'غير محدد';
+                if (bankName === fallbackBank) {
+                  shouldIncludeExpense = true;
+                  distributionFactor = 1;
+                }
+              }
+              
+              if (shouldIncludeExpense) {
+                const distributedAmount = expense.amount / distributionFactor;
+                const normalizedType = normalizeExpenseType(expense.type);
+                
+                switch (normalizedType) {
+                  case 'transportation':
+                    employeeBankData[key].transportation += distributedAmount;
+                    break;
+                  case 'fees':
+                    employeeBankData[key].fees += distributedAmount;
+                    break;
+                  case 'tips':
+                    employeeBankData[key].tips += distributedAmount;
+                    break;
+                  case 'office-supplies':
+                    employeeBankData[key].officeSupplies += distributedAmount;
+                    break;
+                  case 'hospitality':
+                    employeeBankData[key].hospitality += distributedAmount;
+                    break;
+                }
+              }
+            });
+          }
         });
       });
 
-      // Employee summary sheet
-      const employeeSummary = Object.values(summaryByEmployee).map(emp => ({
-        'اسم الموظف': emp.name,
-        'الفرع': emp.branch,
-        'عدد المأموريات': emp.count,
-        'إجمالي المصروفات': emp.total
+      // Convert to array format for Excel
+      const reportData = Object.values(employeeBankData).map(data => ({
+        'اسم الموظف': data.employeeName,
+        'الكود': data.employeeCode,
+        'فرع': data.employeeBranch,
+        'بنك / الشركة': data.bankName,
+        'انتقالات': Math.round(data.transportation * 100) / 100,
+        'رسوم': Math.round(data.fees * 100) / 100,
+        'اكراميات': Math.round(data.tips * 100) / 100,
+        'أدوات مكتبية': Math.round(data.officeSupplies * 100) / 100,
+        'ضيافة': Math.round(data.hospitality * 100) / 100
       }));
 
-      const employeeWs = XLSX.utils.json_to_sheet(employeeSummary);
-      XLSX.utils.book_append_sheet(workbook, employeeWs, 'ملخص الموظفين');
-
-      // Bank summary sheet
-      const bankSummary = Object.entries(expensesByBank).map(([bank, total]) => ({
-        'البنك': bank,
-        'إجمالي المصروفات': total
-      }));
-
-      const bankWs = XLSX.utils.json_to_sheet(bankSummary);
-      XLSX.utils.book_append_sheet(workbook, bankWs, 'ملخص البنوك');
-
-      // Expense type summary sheet
-      const typeSummary = Object.entries(expensesByType).map(([type, total]) => ({
-        'نوع المصروف': type,
-        'إجمالي المبلغ': total
-      }));
-
-      const typeWs = XLSX.utils.json_to_sheet(typeSummary);
-      XLSX.utils.book_append_sheet(workbook, typeWs, 'ملخص أنواع المصروفات');
+      // Create main sheet
+      const mainSheet = XLSX.utils.json_to_sheet(reportData);
+      
+      // Set column widths for better readability
+      const columnWidths = [
+        { wch: 30 }, // اسم الموظف
+        { wch: 8 },  // الكود
+        { wch: 15 }, // فرع
+        { wch: 20 }, // بنك / الشركة
+        { wch: 10 }, // انتقالات
+        { wch: 8 },  // رسوم
+        { wch: 10 }, // اكراميات
+        { wch: 12 }, // أدوات مكتبية
+        { wch: 8 }   // ضيافة
+      ];
+      
+      mainSheet['!cols'] = columnWidths;
+      
+      XLSX.utils.book_append_sheet(workbook, mainSheet, 'تقرير الفترة');
 
       // Export file
       const filename = `period-report-${fromDate}-to-${toDate}.xlsx`;
