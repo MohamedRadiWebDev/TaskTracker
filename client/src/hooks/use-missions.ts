@@ -81,15 +81,6 @@ export function useMissions() {
 
   // Delete mission function
   const deleteMissionById = async (id: string) => {
-    if (missions.length <= 1) {
-      toast({
-        title: "لا يمكن الحذف",
-        description: "يجب أن تبقى مأمورية واحدة على الأقل",
-        variant: "destructive"
-      });
-      return false;
-    }
-
     try {
       const success = deleteMission(id);
       if (success) {
@@ -97,7 +88,6 @@ export function useMissions() {
         toast({
           title: "تم حذف المأمورية",
           description: "تم حذف المأمورية بنجاح",
-          variant: "destructive"
         });
         return true;
       }
