@@ -45,9 +45,9 @@ function normalizeExpenseType(type: string): string {
 
 // Detection helper for detailed export format
 function isDetailedExportRow(row: any): boolean {
-  // Check for bank slot columns like "بنك / شركة ( مامورية1)"
+  // Check for bank slot columns like "بنك / شركة ( بنك1)"
   for (let i = 1; i <= 4; i++) {
-    if (row[`بنك / شركة ( مامورية${i})`]) {
+    if (row[`بنك / شركة ( بنك${i})`]) {
       return true;
     }
   }
@@ -372,10 +372,10 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           
           // Process up to 4 bank missions and collect by type with bank allocations
           for (let i = 1; i <= 4; i++) {
-            const bankName = String((row as any)[`بنك / شركة ( مامورية${i})`] || '').trim();
+            const bankName = String((row as any)[`بنك / شركة ( بنك${i})`] || '').trim();
             
             // Skip if bank name is empty or placeholder
-            if (!bankName || bankName === 'لا يوجد مامورية' || bankName === '') continue;
+            if (!bankName || bankName === 'لا يوجد بنك' || bankName === '') continue;
             
             uniqueBanks.add(bankName);
             
