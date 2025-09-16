@@ -6,6 +6,7 @@ import { Label } from '../components/ui/label';
 import { Calendar, Download, FileText, Loader2 } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { useMissions } from '../hooks/use-missions';
+import ThemeToggle from '../components/theme-toggle';
 import * as XLSX from 'xlsx';
 
 export default function PeriodReport() {
@@ -240,14 +241,17 @@ export default function PeriodReport() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center">
-          <FileText className="w-8 h-8 text-primary ml-3" />
-          تقرير المأموريات بالفترة
-        </h1>
-        <p className="text-muted-foreground">
-          قم بتحديد فترة زمنية لتصدير تقرير إجمالي مصروفات الموظفين لكل بنك وبند مصروف
-        </p>
+      <div className="mb-8 flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center">
+            <FileText className="w-8 h-8 text-primary ml-3" />
+            تقرير المأموريات بالفترة
+          </h1>
+          <p className="text-muted-foreground">
+            قم بتحديد فترة زمنية لتصدير تقرير إجمالي مصروفات الموظفين لكل بنك وبند مصروف
+          </p>
+        </div>
+        <ThemeToggle />
       </div>
 
       <Card className="p-8 bg-background border shadow-sm">

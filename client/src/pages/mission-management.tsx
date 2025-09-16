@@ -7,6 +7,7 @@ import EmployeeLookup from "../components/employee-lookup";
 import MissionDetails from "../components/mission-details";
 import ExpenseManagement from "../components/expense-management";
 import BankDistribution from "../components/bank-distribution";
+import ThemeToggle from "../components/theme-toggle";
 import { useMissions } from "../hooks/use-missions";
 import type { Mission, ExpenseItem, InsertMission, Employee } from "../types/schema";
 
@@ -365,6 +366,8 @@ export default function MissionManagement() {
         </div>
 
         <div className="flex gap-3">
+          <ThemeToggle />
+          
           <Button
             onClick={() => setLocation("/period-report")}
             variant="outline"
