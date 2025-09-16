@@ -218,7 +218,7 @@ export function exportMissionsToExcel(missions: Mission[]): void {
         const missionNum = i + 1;
         
         if (bankMission) {
-          row[`بنك / شركة ( مامورية${missionNum})`] = sanitizeForExcel(bankMission.bankName);
+          row[`بنك / شركة ( بنك${missionNum})`] = sanitizeForExcel(bankMission.bankName);
           row[`انتقالات${missionNum}`] = bankMission.transportation;
           row[`رسوم${missionNum}`] = bankMission.fees;
           row[`اكراميات${missionNum}`] = bankMission.tips;
@@ -226,8 +226,8 @@ export function exportMissionsToExcel(missions: Mission[]): void {
           row[`ضيافة${missionNum}`] = bankMission.hospitality;
           row[`الاجمالى${missionNum}`] = bankMission.total;
         } else {
-          // Empty mission slot
-          row[`بنك / شركة ( مامورية${missionNum})`] = 'لا يوجد مامورية';
+          // Empty bank slot
+          row[`بنك / شركة ( بنك${missionNum})`] = 'لا يوجد بنك';
           row[`انتقالات${missionNum}`] = 0;
           row[`رسوم${missionNum}`] = 0;
           row[`اكراميات${missionNum}`] = 0;
@@ -248,10 +248,10 @@ export function exportMissionsToExcel(missions: Mission[]): void {
       'اسم الموظف', 'الكود', 'فرع', 'التاريخ', 'اليوم', 'بيـــــــــــــــــــــــان'
     ];
     
-    // Add headers for 4 missions
+    // Add headers for 4 banks
     for (let i = 1; i <= 4; i++) {
       headers.push(
-        `بنك / شركة ( مامورية${i})`,
+        `بنك / شركة ( بنك${i})`,
         `انتقالات${i}`,
         `رسوم${i}`,
         `اكراميات${i}`,
