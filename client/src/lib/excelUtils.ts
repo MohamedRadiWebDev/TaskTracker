@@ -219,12 +219,12 @@ export function exportMissionsToExcel(missions: Mission[]): void {
         
         if (bankMission) {
           row[`بنك / شركة ( مامورية${missionNum})`] = sanitizeForExcel(bankMission.bankName);
-          row[`انتقالات${missionNum}`] = Math.round(bankMission.transportation * 100) / 100;
-          row[`رسوم${missionNum}`] = Math.round(bankMission.fees * 100) / 100;
-          row[`اكراميات${missionNum}`] = Math.round(bankMission.tips * 100) / 100;
-          row[`أدوات مكتبية${missionNum}`] = Math.round(bankMission.officeSupplies * 100) / 100;
-          row[`ضيافة${missionNum}`] = Math.round(bankMission.hospitality * 100) / 100;
-          row[`الاجمالى${missionNum}`] = Math.round(bankMission.total * 100) / 100;
+          row[`انتقالات${missionNum}`] = bankMission.transportation;
+          row[`رسوم${missionNum}`] = bankMission.fees;
+          row[`اكراميات${missionNum}`] = bankMission.tips;
+          row[`أدوات مكتبية${missionNum}`] = bankMission.officeSupplies;
+          row[`ضيافة${missionNum}`] = bankMission.hospitality;
+          row[`الاجمالى${missionNum}`] = bankMission.total;
         } else {
           // Empty mission slot
           row[`بنك / شركة ( مامورية${missionNum})`] = 'لا يوجد مامورية';
@@ -237,8 +237,8 @@ export function exportMissionsToExcel(missions: Mission[]): void {
         }
       }
       
-      // Add grand total (rounded)
-      row['الاجمالى'] = Math.round(grandTotal * 100) / 100;
+      // Add grand total (full precision)
+      row['الاجمالى'] = grandTotal;
       
       exportRows.push(row);
     });
