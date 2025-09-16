@@ -19,6 +19,17 @@ export default function EmployeeLookup({ employee, onEmployeeChange }: EmployeeL
   
   const { findEmployeeByCode } = useEmployees();
 
+  // Sync internal state with employee prop changes
+  useEffect(() => {
+    if (employee?.code) {
+      setEmployeeCode(employee.code.toString());
+    } else {
+      setEmployeeCode('');
+      setFetchedEmployee(null);
+      setError(null);
+    }
+  }, [employee]);
+
   const handleCodeChange = async (value: string) => {
     setEmployeeCode(value);
     setError(null);

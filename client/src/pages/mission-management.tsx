@@ -458,6 +458,7 @@ export default function MissionManagement() {
             {/* Employee Lookup */}
             <Card className="p-6 bg-background border shadow-sm">
               <EmployeeLookup
+                key={activeMission.id}
                 employee={employeeForLookup}
                 onEmployeeChange={handleEmployeeChange}
               />
