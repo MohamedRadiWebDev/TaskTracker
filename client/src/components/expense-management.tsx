@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -48,6 +48,34 @@ const expenseTypeIcons = {
   'hospitality': Coffee
 };
 
+// Function to safely evaluate mathematical expressions
+function evaluateFormula(formula: string): number | null {
+  try {
+    // Remove leading = or + signs
+    let expression = formula.replace(/^[=+]/, '').trim();
+    
+    // Only allow safe mathematical operations and numbers
+    const safeExpression = expression.replace(/[^0-9+\-*/().\s]/g, '');
+    
+    // Prevent empty or invalid expressions
+    if (!safeExpression || safeExpression.length === 0) {
+      return null;
+    }
+    
+    // Use Function constructor for safe evaluation (better than eval)
+    const result = new Function('return (' + safeExpression + ')')();
+    
+    // Check if result is a valid number
+    if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+      return Math.round(result * 100) / 100; // Round to 2 decimal places
+    }
+    
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
 export default function ExpenseManagement({
   expenses,
   totals,
@@ -56,6 +84,9 @@ export default function ExpenseManagement({
   onRemoveExpense
 }: ExpenseManagementProps) {
   const { banks } = useBanks();
+  
+  // Track display values for formula inputs
+  const [displayValues, setDisplayValues] = useState<Record<string, string>>({});
 
   return (
     <div>
@@ -148,12 +179,58 @@ export default function ExpenseManagement({
                 </Label>
                 <Input
                   type="text"
-                  value={expense.amount || ''}
-                  onChange={(e) => onUpdateExpense(expense.id, { 
-                    amount: parseFloat(e.target.value) || 0,
-                    bankAllocations: undefined // Clear custom allocations when amount changes
-                  })}
-                  placeholder="0.00"
+                  value={displayValues[expense.id] !== undefined ? displayValues[expense.id] : (expense.amount || '')}
+                  onChange={(e) => {
+                    const inputValue = e.target.value;
+                    
+                    // Update display value immediately
+                    setDisplayValues(prev => ({
+                      ...prev,
+                      [expense.id]: inputValue
+                    }));
+                    
+                    // Check if input is a formula (starts with = or +)
+                    if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
+                      const calculatedValue = evaluateFormula(inputValue);
+                      if (calculatedValue !== null) {
+                        // Update the actual amount with calculated value
+                        onUpdateExpense(expense.id, { 
+                          amount: calculatedValue,
+                          bankAllocations: undefined
+                        });
+                      }
+                    } else {
+                      // Regular number input
+                      const numericValue = parseFloat(inputValue) || 0;
+                      onUpdateExpense(expense.id, { 
+                        amount: numericValue,
+                        bankAllocations: undefined
+                      });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const inputValue = e.target.value;
+                    
+                    // If it was a formula and calculated successfully, show the result
+                    if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
+                      const calculatedValue = evaluateFormula(inputValue);
+                      if (calculatedValue !== null) {
+                        setDisplayValues(prev => ({
+                          ...prev,
+                          [expense.id]: calculatedValue.toString()
+                        }));
+                      }
+                    }
+                  }}
+                  onFocus={(e) => {
+                    // Clear display value to show stored amount when focused
+                    setDisplayValues(prev => {
+                      const newValues = { ...prev };
+                      delete newValues[expense.id];
+                      return newValues;
+                    });
+                  }}
+                  placeholder="0.00 أو =2+2+2"
                   data-testid={`input-amount-${expense.id}`}
                 />
               </div>
