@@ -83,7 +83,7 @@ export default function EmployeeLookup({ employee, onEmployeeChange }: EmployeeL
           <div className="relative">
             <Input
               id="employeeCode"
-              type="number"
+              type="text"
               value={employeeCode}
               onChange={(e) => handleCodeChange(e.target.value)}
               placeholder="أدخل كود الموظف"

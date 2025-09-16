@@ -147,12 +147,10 @@ export default function ExpenseManagement({
                   المبلغ (جنيه)
                 </Label>
                 <Input
-                  type="number"
+                  type="text"
                   value={expense.amount || ''}
                   onChange={(e) => onUpdateExpense(expense.id, { amount: parseFloat(e.target.value) || 0 })}
                   placeholder="0.00"
-                  min="0"
-                  step="0.01"
                   data-testid={`input-amount-${expense.id}`}
                 />
               </div>
