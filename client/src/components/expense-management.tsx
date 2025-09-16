@@ -149,7 +149,10 @@ export default function ExpenseManagement({
                 <Input
                   type="text"
                   value={expense.amount || ''}
-                  onChange={(e) => onUpdateExpense(expense.id, { amount: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => onUpdateExpense(expense.id, { 
+                    amount: parseFloat(e.target.value) || 0,
+                    bankAllocations: undefined // Clear custom allocations when amount changes
+                  })}
                   placeholder="0.00"
                   data-testid={`input-amount-${expense.id}`}
                 />
@@ -172,7 +175,10 @@ export default function ExpenseManagement({
                             const updatedBanks = checked
                               ? [...currentBanks, bank.name]
                               : currentBanks.filter(b => b !== bank.name);
-                            onUpdateExpense(expense.id, { banks: updatedBanks });
+                            onUpdateExpense(expense.id, { 
+                              banks: updatedBanks,
+                              bankAllocations: undefined // Clear custom allocations when banks change
+                            });
                           }}
                           data-testid={`checkbox-bank-${expense.id}-${bank.id}`}
                         />
