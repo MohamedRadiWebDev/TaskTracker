@@ -43,6 +43,48 @@ function normalizeExpenseType(type: string): string {
   return expenseTypeMapping[type] || type;
 }
 
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  // Check for bank slot columns like "بنك / شركة ( مامورية1)"
+  for (let i = 1; i <= 4; i++) {
+    if (row[`بنك / شركة ( مامورية${i})`]) {
+      return true;
+    }
+  }
+  // Check for expense type columns with numbers
+  const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'أدوات مكتبية', 'ضيافة'];
+  for (const type of typeColumns) {
+    for (let i = 1; i <= 4; i++) {
+      if (row[`${type}${i}`] !== undefined) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Helper to parse numbers from Excel cells
+function parseNumber(val: any): number {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    // Remove commas and parse
+    const cleaned = val.replace(/[,،]/g, '');
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+// Expense type label mapping for detailed export
+const detailedExportTypeMapping: Record<string, string> = {
+  'انتقالات': 'transportation',
+  'رسوم': 'fees', 
+  'اكراميات': 'tips',
+  'أدوات مكتبية': 'office-supplies',
+  'ضيافة': 'hospitality'
+};
+
 // Helper to get Arabic day name
 const getArabicDayName = (dateString: string): string => {
   const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -307,44 +349,110 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
 
     for (const row of missionData) {
       try {
-        // Support multiple ID column variations
-        const originalId = (row as any)['رقم المأمورية'] || (row as any)['كود المأمورية'] || 
-                          (row as any)['رقم'] || (row as any)['ID'] || (row as any)['Mission ID'] ||
-                          (row as any)['كود'] || (row as any)['المرجع'];
-        const newId = generateMissionId(); // Generate new ID
+        const newId = generateMissionId();
         
-        // Support multiple column name variations
-        const employeeName = String((row as any)['اسم الموظف'] || (row as any)['الموظف'] || '').trim();
-        const employeeCode = parseInt((row as any)['كود الموظف'] || (row as any)['الكود']) || 0;
-        const employeeBranch = String((row as any)['الفرع'] || (row as any)['فرع'] || '').trim();
-        const missionDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'] || new Date().toISOString().split('T')[0];
-        const bank = (row as any)['البنك'] || (row as any)['بنك'] || null;
-        const statement = (row as any)['البيان'] || (row as any)['وصف'] || null;
-        const totalAmount = parseFloat((row as any)['إجمالي المصروفات'] || (row as any)['الإجمالي'] || '0') || 0;
+        // Check if this is a detailed export format
+        if (isDetailedExportRow(row)) {
+          // Parse detailed export format with numbered bank columns
+          console.log('Detected detailed export format row');
+          
+          // Support multiple column name variations for basic info
+          const employeeName = String((row as any)['اسم الموظف'] || (row as any)['الموظف'] || '').trim();
+          const employeeCode = parseInt((row as any)['كود الموظف'] || (row as any)['الكود']) || 0;
+          const employeeBranch = String((row as any)['الفرع'] || (row as any)['فرع'] || '').trim();
+          const missionDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'] || new Date().toISOString().split('T')[0];
+          const statement = String((row as any)['بيـــــــــــــــــــــــان'] || (row as any)['البيان'] || (row as any)['وصف'] || '').trim();
+          
+          const expenses: ExpenseItem[] = [];
+          const uniqueBanks = new Set<string>();
+          
+          // Process up to 4 bank missions
+          for (let i = 1; i <= 4; i++) {
+            const bankName = String((row as any)[`بنك / شركة ( مامورية${i})`] || '').trim();
+            
+            // Skip if bank name is empty or placeholder
+            if (!bankName || bankName === 'لا يوجد مامورية' || bankName === '') continue;
+            
+            uniqueBanks.add(bankName);
+            
+            // Process each expense type for this bank
+            for (const [label, type] of Object.entries(detailedExportTypeMapping)) {
+              const amount = parseNumber((row as any)[`${label}${i}`]);
+              
+              if (amount > 0) {
+                expenses.push({
+                  id: generateExpenseId(),
+                  type,
+                  amount,
+                  banks: [bankName]
+                });
+              }
+            }
+          }
+          
+          // Calculate total from expenses
+          const calculatedTotal = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+          const sheetTotal = parseNumber((row as any)['الاجمالى']);
+          
+          const mission: Mission = {
+            id: newId,
+            employeeName,
+            employeeCode,
+            employeeBranch,
+            missionDate,
+            bank: uniqueBanks.size === 1 ? Array.from(uniqueBanks)[0] : null,
+            statement: statement || null,
+            totalAmount: calculatedTotal.toString(),
+            expenses,
+            createdAt: new Date()
+          };
+          
+          if (Math.abs(calculatedTotal - sheetTotal) > 0.01) {
+            console.warn(`Total mismatch for ${employeeName}: calculated=${calculatedTotal}, sheet=${sheetTotal}`);
+          }
+          
+          importedMissions.push(mission);
+          
+        } else {
+          // Original simple format parsing
+          const originalId = (row as any)['رقم المأمورية'] || (row as any)['كود المأمورية'] || 
+                            (row as any)['رقم'] || (row as any)['ID'] || (row as any)['Mission ID'] ||
+                            (row as any)['كود'] || (row as any)['المرجع'];
+          
+          // Support multiple column name variations
+          const employeeName = String((row as any)['اسم الموظف'] || (row as any)['الموظف'] || '').trim();
+          const employeeCode = parseInt((row as any)['كود الموظف'] || (row as any)['الكود']) || 0;
+          const employeeBranch = String((row as any)['الفرع'] || (row as any)['فرع'] || '').trim();
+          const missionDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'] || new Date().toISOString().split('T')[0];
+          const bank = (row as any)['البنك'] || (row as any)['بنك'] || null;
+          const statement = (row as any)['البيان'] || (row as any)['وصف'] || null;
+          const totalAmount = parseFloat((row as any)['إجمالي المصروفات'] || (row as any)['الإجمالي'] || '0') || 0;
 
-        const mission: Mission = {
-          id: newId,
-          employeeName,
-          employeeCode,
-          employeeBranch,
-          missionDate,
-          bank: bank ? String(bank).trim() : null,
-          statement: statement ? String(statement).trim() : null,
-          totalAmount: totalAmount.toString(),
-          expenses: [],
-          createdAt: new Date()
-        };
+          const mission: Mission = {
+            id: newId,
+            employeeName,
+            employeeCode,
+            employeeBranch,
+            missionDate,
+            bank: bank ? String(bank).trim() : null,
+            statement: statement ? String(statement).trim() : null,
+            totalAmount: totalAmount.toString(),
+            expenses: [],
+            createdAt: new Date()
+          };
 
+          // Map original Excel ID to new mission ID for expense sheet linking
+          if (originalId) {
+            originalToNewIdMap[String(originalId)] = newId;
+          }
+
+          importedMissions.push(mission);
+        }
+        
         if (importedMissions.length < 3) {
-          console.log(`Sample mission ${importedMissions.length + 1}: ${mission.employeeName} (${originalId} -> ${newId})`);
+          console.log(`Sample mission ${importedMissions.length}: ${importedMissions[importedMissions.length - 1].employeeName}`);
         }
-
-        // Map original Excel ID to new mission ID
-        if (originalId) {
-          originalToNewIdMap[String(originalId)] = newId;
-        }
-
-        importedMissions.push(mission);
+        
       } catch (error) {
         console.warn('Error parsing mission row:', row, error);
       }
