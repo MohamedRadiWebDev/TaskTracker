@@ -34,6 +34,7 @@ export default function MissionDetails({
           value={missionDate}
           onChange={(e) => onMissionDateChange(e.target.value)}
           className="w-full max-w-md"
+          tabIndex={2}
           data-testid="input-mission-date"
         />
       </div>
@@ -49,6 +50,7 @@ export default function MissionDetails({
           rows={4}
           placeholder="أدخل بيان المأمورية..."
           className="w-full resize-none"
+          tabIndex={3}
           data-testid="input-mission-statement"
         />
       </div>

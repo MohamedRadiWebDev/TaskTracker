@@ -99,6 +99,7 @@ export default function EmployeeLookup({ employee, onEmployeeChange }: EmployeeL
               onChange={(e) => handleCodeChange(e.target.value)}
               placeholder="أدخل كود الموظف"
               className="w-full"
+              tabIndex={1}
               data-testid="input-employee-code"
             />
             {isLoading && (
