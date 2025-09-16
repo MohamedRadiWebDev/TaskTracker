@@ -1,12 +1,4 @@
-// Temporary server file to satisfy package.json script
-// This is a frontend-only app that should be run with vite
 
-import { spawn } from 'child_process';
-
-console.log('Starting Vite development server...');
-
-// Create a temporary vite config that allows all hosts
-const tempConfigContent = `
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
@@ -47,24 +39,4 @@ export default defineConfig({
     },
     allowedHosts: true,  // Allow all hosts for development
   },
-});
-`;
-
-import { writeFileSync } from 'fs';
-writeFileSync('vite.config.dev.ts', tempConfigContent);
-
-// Start vite with the temporary config
-const vite = spawn('vite', ['--port', '5000', '--host', '0.0.0.0', '--config', 'vite.config.dev.ts'], {
-  stdio: 'inherit',
-  cwd: process.cwd()
-});
-
-vite.on('error', (error) => {
-  console.error(`Error starting vite: ${error}`);
-  process.exit(1);
-});
-
-vite.on('close', (code) => {
-  console.log(`Vite process exited with code ${code}`);
-  process.exit(code);
 });
