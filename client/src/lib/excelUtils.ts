@@ -52,7 +52,7 @@ function isDetailedExportRow(row: any): boolean {
     }
   }
   // Check for expense type columns with numbers
-  const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'أدوات مكتبية', 'ضيافة'];
+  const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
   for (const type of typeColumns) {
     for (let i = 1; i <= 4; i++) {
       if (row[`${type}${i}`] !== undefined) {
@@ -81,6 +81,7 @@ const detailedExportTypeMapping: Record<string, string> = {
   'انتقالات': 'transportation',
   'رسوم': 'fees', 
   'اكراميات': 'tips',
+  'إكراميات': 'tips',
   'أدوات مكتبية': 'office-supplies',
   'ضيافة': 'hospitality'
 };
@@ -162,7 +163,10 @@ export function exportMissionsToExcel(missions: Mission[]): void {
             }
             
             if (shouldIncludeExpense) {
-              const distributedAmount = expense.amount / distributionFactor;
+              // Use bankAllocations if available, otherwise distribute equally
+              const distributedAmount = expense.bankAllocations && expense.bankAllocations[bankName] 
+                ? expense.bankAllocations[bankName]
+                : expense.amount / distributionFactor;
               const normalizedType = normalizeExpenseType(expense.type);
               
               switch (normalizedType) {
@@ -363,10 +367,10 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           const missionDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'] || new Date().toISOString().split('T')[0];
           const statement = String((row as any)['بيـــــــــــــــــــــــان'] || (row as any)['البيان'] || (row as any)['وصف'] || '').trim();
           
-          const expenses: ExpenseItem[] = [];
+          const expensesByType: Record<string, { amount: number; banks: string[]; bankAllocations: Record<string, number> }> = {};
           const uniqueBanks = new Set<string>();
           
-          // Process up to 4 bank missions
+          // Process up to 4 bank missions and collect by type with bank allocations
           for (let i = 1; i <= 4; i++) {
             const bankName = String((row as any)[`بنك / شركة ( مامورية${i})`] || '').trim();
             
@@ -380,15 +384,29 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
               const amount = parseNumber((row as any)[`${label}${i}`]);
               
               if (amount > 0) {
-                expenses.push({
-                  id: generateExpenseId(),
-                  type,
-                  amount,
-                  banks: [bankName]
-                });
+                if (!expensesByType[type]) {
+                  expensesByType[type] = { amount: 0, banks: [], bankAllocations: {} };
+                }
+                expensesByType[type].amount += amount;
+                expensesByType[type].banks.push(bankName);
+                
+                // Build bank allocations inline
+                if (!expensesByType[type].bankAllocations[bankName]) {
+                  expensesByType[type].bankAllocations[bankName] = 0;
+                }
+                expensesByType[type].bankAllocations[bankName] += amount;
               }
             }
           }
+          
+          // Convert consolidated expenses to ExpenseItem array
+          const expenses: ExpenseItem[] = Object.entries(expensesByType).map(([type, data]) => ({
+            id: generateExpenseId(),
+            type,
+            amount: data.amount,
+            banks: Array.from(new Set(data.banks)), // Remove duplicate banks
+            bankAllocations: data.bankAllocations
+          }));
           
           // Calculate total from expenses
           const calculatedTotal = expenses.reduce((sum, exp) => sum + exp.amount, 0);

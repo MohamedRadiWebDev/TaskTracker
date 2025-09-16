@@ -34,13 +34,15 @@ export interface ExpenseItem {
   type: string;
   amount: number;
   banks: string[];
+  bankAllocations?: Record<string, number>; // Optional: specific amounts per bank
 }
 
 export const expenseItemSchema = z.object({
   id: z.string(),
   type: z.string(),
   amount: z.number(),
-  banks: z.array(z.string())
+  banks: z.array(z.string()),
+  bankAllocations: z.record(z.string(), z.number()).optional()
 });
 
 // Mission Types
