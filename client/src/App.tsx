@@ -1,6 +1,7 @@
 import { Switch, Route } from "wouter";
 import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { ThemeProvider } from "./hooks/use-theme";
 import MissionManagement from "./pages/mission-management";
 import PeriodReport from "./pages/period-report";
 import NotFound from "./pages/not-found";
@@ -17,10 +18,12 @@ function Router() {
 
 function App() {
   return (
-    <TooltipProvider>
-      <Toaster />
-      <Router />
-    </TooltipProvider>
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Router />
+      </TooltipProvider>
+    </ThemeProvider>
   );
 }
 
