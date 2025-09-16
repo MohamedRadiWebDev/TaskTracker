@@ -8,7 +8,12 @@ console.log('Starting Vite development server...');
 // Start vite in the current process with proper stdio handling
 const vite = spawn('vite', ['--port', '5000', '--host', '0.0.0.0'], {
   stdio: 'inherit',
-  cwd: process.cwd()
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    VITE_DEV_SERVER_HOST: '0.0.0.0',
+    DANGEROUSLY_DISABLE_HOST_CHECK: 'true'
+  }
 });
 
 vite.on('error', (error) => {
