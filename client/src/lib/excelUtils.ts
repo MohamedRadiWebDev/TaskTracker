@@ -301,24 +301,43 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
     const currentMissions = getMissions();
     // Map to track original Excel ID -> new mission ID for expense matching
     const originalToNewIdMap: Record<string, string> = {};
+    
+    console.log('Starting to parse mission data...', missionData.length, 'rows found');
+    console.log('First mission row sample:', missionData[0]);
 
     for (const row of missionData) {
       try {
-        const originalId = (row as any)['رقم المأمورية']; // Store original ID from Excel
+        // Support multiple ID column variations
+        const originalId = (row as any)['رقم المأمورية'] || (row as any)['كود المأمورية'] || 
+                          (row as any)['رقم'] || (row as any)['ID'] || (row as any)['Mission ID'] ||
+                          (row as any)['كود'] || (row as any)['المرجع'];
         const newId = generateMissionId(); // Generate new ID
         
+        // Support multiple column name variations
+        const employeeName = String((row as any)['اسم الموظف'] || (row as any)['الموظف'] || '').trim();
+        const employeeCode = parseInt((row as any)['كود الموظف'] || (row as any)['الكود']) || 0;
+        const employeeBranch = String((row as any)['الفرع'] || (row as any)['فرع'] || '').trim();
+        const missionDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'] || new Date().toISOString().split('T')[0];
+        const bank = (row as any)['البنك'] || (row as any)['بنك'] || null;
+        const statement = (row as any)['البيان'] || (row as any)['وصف'] || null;
+        const totalAmount = parseFloat((row as any)['إجمالي المصروفات'] || (row as any)['الإجمالي'] || '0') || 0;
+
         const mission: Mission = {
           id: newId,
-          employeeName: String((row as any)['اسم الموظف'] || '').trim(),
-          employeeCode: parseInt((row as any)['كود الموظف']) || 0,
-          employeeBranch: String((row as any)['الفرع'] || '').trim(),
-          missionDate: (row as any)['تاريخ المأمورية'] || new Date().toISOString().split('T')[0],
-          bank: (row as any)['البنك'] ? String((row as any)['البنك']).trim() : null,
-          statement: (row as any)['البيان'] ? String((row as any)['البيان']).trim() : null,
-          totalAmount: (parseFloat((row as any)['إجمالي المصروفات']) || 0).toString(),
+          employeeName,
+          employeeCode,
+          employeeBranch,
+          missionDate,
+          bank: bank ? String(bank).trim() : null,
+          statement: statement ? String(statement).trim() : null,
+          totalAmount: totalAmount.toString(),
           expenses: [],
           createdAt: new Date()
         };
+
+        if (importedMissions.length < 3) {
+          console.log(`Sample mission ${importedMissions.length + 1}: ${mission.employeeName} (${originalId} -> ${newId})`);
+        }
 
         // Map original Excel ID to new mission ID
         if (originalId) {
@@ -343,16 +362,32 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
       // Group expenses by mission ID and add to missions
       const expensesByMission: Record<string, ExpenseItem[]> = {};
       
+      console.log('Processing expense data...', expenseData.length, 'rows');
+      if (expenseData.length > 0) {
+        console.log('Sample expense row:', expenseData[0]);
+      }
+      
       for (const row of expenseData) {
         try {
-          const missionId = (row as any)['رقم المأمورية'];
-          if (!missionId) continue;
+          // Support multiple ID column variations for expenses too
+          const missionId = (row as any)['رقم المأمورية'] || (row as any)['كود المأمورية'] || 
+                          (row as any)['رقم'] || (row as any)['ID'] || (row as any)['Mission ID'] ||
+                          (row as any)['كود'] || (row as any)['المرجع'];
+          
+          if (!missionId) {
+            console.log('Skipping expense row - no mission ID found in any expected column');
+            continue;
+          }
+
+          const expenseType = (row as any)['نوع المصروف'] || (row as any)['النوع'] || 'transportation';
+          const expenseAmount = parseFloat((row as any)['المبلغ']) || parseFloat((row as any)['القيمة']) || 0;
+          const banksStr = (row as any)['البنوك'] || (row as any)['البنك'] || '';
 
           const expense: ExpenseItem = {
             id: generateExpenseId(),
-            type: (row as any)['نوع المصروف'] || 'transportation',
-            amount: parseFloat((row as any)['المبلغ']) || 0,
-            banks: String((row as any)['البنوك'] || '').split(',').map((bank: string) => bank.trim()).filter((bank: string) => bank)
+            type: normalizeExpenseType(expenseType),
+            amount: expenseAmount,
+            banks: String(banksStr).split(/[,،;\n]/).map((bank: string) => bank.trim()).filter((bank: string) => bank)
           };
 
           if (!expensesByMission[missionId]) {
@@ -363,21 +398,42 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           console.warn('Error parsing expense row:', row, error);
         }
       }
+      
+      console.log('Grouped expenses by mission:', expensesByMission);
 
       // Add expenses to corresponding missions using the ID mapping
+      console.log('Linking expenses to missions...');
+      console.log('ID mappings:', originalToNewIdMap);
+      console.log('Expenses by mission:', Object.keys(expensesByMission));
+      
+      let linkedCount = 0;
       importedMissions.forEach(mission => {
         // Find expenses using the reverse lookup: find original ID that maps to this mission ID
         const originalId = Object.keys(originalToNewIdMap).find(origId => originalToNewIdMap[origId] === mission.id);
+        
         if (originalId && expensesByMission[originalId]) {
           mission.expenses = expensesByMission[originalId];
+          // Recalculate total from actual expenses
           mission.totalAmount = mission.expenses.reduce((sum, exp) => sum + exp.amount, 0).toString();
+          linkedCount++;
+          
+          if (linkedCount <= 3) {
+            console.log(`Linked ${mission.expenses.length} expenses to mission: ${mission.employeeName}`);
+          }
         }
       });
+      
+      console.log(`Successfully linked expenses for ${linkedCount} out of ${importedMissions.length} missions`);
     }
 
     // Save imported missions to localStorage
+    console.log(`Saving ${importedMissions.length} imported missions...`);
+    console.log('Final imported missions:', importedMissions);
+    
     const allMissions = [...currentMissions, ...importedMissions];
     setMissions(allMissions);
+    
+    console.log(`Total missions after import: ${allMissions.length}`);
 
     return {
       success: true,
