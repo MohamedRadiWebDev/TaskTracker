@@ -191,11 +191,11 @@ export default function PeriodReport() {
         'الكود': data.employeeCode,
         'فرع': data.employeeBranch,
         'بنك / الشركة': data.bankName,
-        'انتقالات': Math.round(data.transportation * 100) / 100,
-        'رسوم': Math.round(data.fees * 100) / 100,
-        'اكراميات': Math.round(data.tips * 100) / 100,
-        'أدوات مكتبية': Math.round(data.officeSupplies * 100) / 100,
-        'ضيافة': Math.round(data.hospitality * 100) / 100
+        'انتقالات': data.transportation,
+        'رسوم': data.fees,
+        'اكراميات': data.tips,
+        'أدوات مكتبية': data.officeSupplies,
+        'ضيافة': data.hospitality
       }));
 
       // Create main sheet

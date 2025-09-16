@@ -133,15 +133,6 @@ export default function MissionManagement() {
   };
 
   const deleteMission = async (missionId: string) => {
-    if (missions.length <= 1) {
-      toast({
-        title: "لا يمكن الحذف",
-        description: "يجب أن تبقى مأمورية واحدة على الأقل",
-        variant: "destructive"
-      });
-      return;
-    }
-
     if (window.confirm('هل أنت متأكد من حذف هذه المأمورية؟')) {
       setDeleteLoading(true);
       try {
@@ -444,18 +435,16 @@ export default function MissionManagement() {
                     <span className="text-xs opacity-75">({mission.employeeName})</span>
                   )}
                 </Button>
-                {missions.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteMission(mission.id)}
-                    className="h-8 w-8 p-0 hover:bg-destructive/20"
-                    disabled={deleteLoading}
-                    data-testid={`button-delete-${mission.id}`}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => deleteMission(mission.id)}
+                  className="h-8 w-8 p-0 hover:bg-destructive/20"
+                  disabled={deleteLoading}
+                  data-testid={`button-delete-${mission.id}`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
               </div>
             ))}
           </div>
