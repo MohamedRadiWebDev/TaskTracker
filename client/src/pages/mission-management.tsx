@@ -349,14 +349,14 @@ export default function MissionManagement() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-8">
+    <div className="container mx-auto px-4 py-6 scrollbar-modern">
+      <div className="flex items-center justify-between mb-8 fade-in">
         <div className="flex items-center gap-4">
-          <div className="bg-primary text-primary-foreground rounded-lg p-3">
+          <div className="bg-primary text-primary-foreground rounded-2xl p-3 glass-effect">
             <Briefcase className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">
+            <h1 className="text-3xl font-bold gradient-text">
               إدارة المأموريات
             </h1>
             <p className="text-muted-foreground mt-1">
