@@ -418,11 +418,11 @@ export default function MissionManagement() {
       </div>
 
       {/* Missions tabs */}
-      {missions.length > 1 && (
-        <div className="mb-6">
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {missions.map((mission: Mission, index: number) => (
-              <div key={mission.id} className="flex items-center gap-1">
+      <div className="mb-6">
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {missions.map((mission: Mission, index: number) => (
+            <div key={mission.id} className="flex items-center gap-1">
+              {missions.length > 1 && (
                 <Button
                   variant={activeMissionId === mission.id ? "default" : "outline"}
                   size="sm"
@@ -435,21 +435,21 @@ export default function MissionManagement() {
                     <span className="text-xs opacity-75">({mission.employeeName})</span>
                   )}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => deleteMission(mission.id)}
-                  className="h-8 w-8 p-0 hover:bg-destructive/20"
-                  disabled={deleteLoading}
-                  data-testid={`button-delete-${mission.id}`}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => deleteMission(mission.id)}
+                className="h-8 w-8 p-0 hover:bg-destructive/20"
+                disabled={deleteLoading}
+                data-testid={`button-delete-${mission.id}`}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       {activeMission && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
