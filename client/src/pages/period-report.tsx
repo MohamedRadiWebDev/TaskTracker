@@ -240,13 +240,11 @@ export default function PeriodReport() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl scrollbar-modern">
-      <div className="mb-8 flex justify-between items-start fade-in">
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="mb-8 flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold gradient-text mb-2 flex items-center">
-            <div className="bg-primary text-primary-foreground rounded-2xl p-2 ml-3 glass-effect">
-              <FileText className="w-8 h-8" />
-            </div>
+          <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center">
+            <FileText className="w-8 h-8 text-primary ml-3" />
             تقرير المأموريات بالفترة
           </h1>
           <p className="text-muted-foreground">
@@ -256,7 +254,7 @@ export default function PeriodReport() {
         <ThemeToggle />
       </div>
 
-      <Card className="modern-card p-8 slide-in">
+      <Card className="p-8 bg-background border shadow-sm">
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
