@@ -11,8 +11,10 @@ function generateUUID(): string {
   });
 }
 
-// Storage key
+// Storage keys
 const MISSIONS_KEY = 'missions';
+const MISSIONS_BACKUP_KEY = 'missions_backup';
+const BACKUP_TTL_KEY = 'missions_backup_ttl';
 
 // Utility functions for localStorage operations
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -155,4 +157,51 @@ export function setMissions(missions: Mission[]): void {
     createdAt: mission.createdAt instanceof Date ? mission.createdAt.toISOString() : mission.createdAt
   }));
   setToStorage(MISSIONS_KEY, serializedMissions);
+}
+
+// Backup missions before bulk operations
+export function backupMissions(): void {
+  const missions = getMissions();
+  const timestamp = new Date().getTime();
+  const backupData = {
+    missions,
+    timestamp
+  };
+  setToStorage(MISSIONS_BACKUP_KEY, backupData);
+  setToStorage(BACKUP_TTL_KEY, timestamp + (30 * 60 * 1000)); // 30 minutes TTL
+}
+
+// Check if backup is still valid
+export function isBackupValid(): boolean {
+  const ttl = getFromStorage<number>(BACKUP_TTL_KEY, 0);
+  return Date.now() < ttl;
+}
+
+// Restore missions from backup
+export function restoreMissionsFromBackup(): Mission[] | null {
+  if (!isBackupValid()) {
+    clearBackup();
+    return null;
+  }
+  
+  const backupData = getFromStorage<{ missions: Mission[], timestamp: number } | null>(MISSIONS_BACKUP_KEY, null);
+  if (!backupData) return null;
+  
+  // Restore missions and clear backup
+  setMissions(backupData.missions);
+  clearBackup();
+  
+  return backupData.missions;
+}
+
+// Clear backup data
+export function clearBackup(): void {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    localStorage.removeItem(MISSIONS_BACKUP_KEY);
+    localStorage.removeItem(BACKUP_TTL_KEY);
+  } catch (error) {
+    console.error('Error clearing backup:', error);
+  }
 }

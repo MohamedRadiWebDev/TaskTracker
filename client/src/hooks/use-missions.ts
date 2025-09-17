@@ -5,6 +5,10 @@ import {
   createMission, 
   updateMission, 
   deleteMission,
+  clearMissions,
+  backupMissions,
+  restoreMissionsFromBackup,
+  isBackupValid,
   getEmployees,
   getBanks,
   getEmployeeByCode
@@ -102,6 +106,76 @@ export function useMissions() {
     }
   };
 
+  // Clear all missions with backup and undo functionality
+  const clearAllMissions = async () => {
+    try {
+      if (missions.length === 0) {
+        toast({
+          title: "لا توجد مأموريات",
+          description: "لا توجد مأموريات لحذفها",
+          variant: "destructive"
+        });
+        return false;
+      }
+
+      // Create backup before clearing
+      backupMissions();
+      
+      // Clear missions
+      clearMissions();
+      setMissions([]);
+      
+      // Show success toast
+      toast({
+        title: `تم حذف ${missions.length} مأمورية`,
+        description: "تم حذف جميع المأموريات بنجاح",
+      });
+      
+      return true;
+    } catch (err) {
+      toast({
+        title: "خطأ في الحذف",
+        description: "حدث خطأ أثناء حذف المأموريات",
+        variant: "destructive"
+      });
+      throw err;
+    }
+  };
+
+  // Undo last clear operation
+  const undoClear = async () => {
+    try {
+      const restored = restoreMissionsFromBackup();
+      if (restored) {
+        setMissions(restored);
+        toast({
+          title: "تم التراجع",
+          description: `تم استرجاع ${restored.length} مأمورية`,
+        });
+        return true;
+      } else {
+        toast({
+          title: "لا يمكن التراجع",
+          description: "انتهت صلاحية النسخة الاحتياطية",
+          variant: "destructive"
+        });
+        return false;
+      }
+    } catch (err) {
+      toast({
+        title: "خطأ في التراجع",
+        description: "حدث خطأ أثناء استرجاع المأموريات",
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
+  // Check if undo is available
+  const canUndo = () => {
+    return isBackupValid();
+  };
+
   // Refresh missions (for import functionality)
   const refreshMissions = () => {
     loadMissions();
@@ -114,6 +188,9 @@ export function useMissions() {
     createNewMission,
     updateMissionById,
     deleteMissionById,
+    clearAllMissions,
+    undoClear,
+    canUndo,
     refreshMissions
   };
 }

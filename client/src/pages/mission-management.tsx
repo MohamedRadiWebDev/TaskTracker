@@ -2,6 +2,18 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog";
 import { useToast } from "../hooks/use-toast";
 import EmployeeLookup from "../components/employee-lookup";
 import MissionDetails from "../components/mission-details";
@@ -16,7 +28,7 @@ interface Totals {
   bankCount: number;
   bankTotals: Record<string, number>;
 }
-import { Briefcase, Save, Trash2, Plus, Edit2, Download, Upload, Loader2, FileText } from "lucide-react";
+import { Briefcase, Save, Trash2, Plus, Edit2, Download, Upload, Loader2, FileText, AlertTriangle, Undo2 } from "lucide-react";
 
 export default function MissionManagement() {
   const { toast } = useToast();
@@ -29,7 +41,7 @@ export default function MissionManagement() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
   // Use localStorage missions instead of API
-  const { missions, isLoading, error, createNewMission, updateMissionById, deleteMissionById, refreshMissions } = useMissions();
+  const { missions, isLoading, error, createNewMission, updateMissionById, deleteMissionById, clearAllMissions, undoClear, canUndo, refreshMissions } = useMissions();
 
   // Get current active mission
   const activeMission = missions.find((m: Mission) => m.id === activeMissionId) || missions[0];
@@ -68,6 +80,9 @@ export default function MissionManagement() {
   const [createLoading, setCreateLoading] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [clearLoading, setClearLoading] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Mission management functions
   const createNewMissionAction = async () => {
@@ -150,6 +165,44 @@ export default function MissionManagement() {
       } finally {
         setDeleteLoading(false);
       }
+    }
+  };
+
+  // Bulk delete all missions with confirmation
+  const handleDeleteAll = async () => {
+    if (deleteConfirmText !== 'حذف الكل') {
+      toast({
+        title: "نص التأكيد غير صحيح",
+        description: "يرجى كتابة 'حذف الكل' للتأكيد",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setClearLoading(true);
+    try {
+      const success = await clearAllMissions();
+      if (success) {
+        setActiveMissionId(null);
+        setShowDeleteDialog(false);
+        setDeleteConfirmText('');
+      }
+    } catch (error) {
+      console.error('Error clearing all missions:', error);
+    } finally {
+      setClearLoading(false);
+    }
+  };
+
+  // Handle undo action
+  const handleUndo = async () => {
+    try {
+      const success = await undoClear();
+      if (success && missions.length > 0) {
+        setActiveMissionId(missions[0].id);
+      }
+    } catch (error) {
+      console.error('Error undoing clear:', error);
     }
   };
 
@@ -401,6 +454,79 @@ export default function MissionManagement() {
               استيراد Excel
             </Button>
           </div>
+
+          {canUndo() && (
+            <Button
+              onClick={handleUndo}
+              variant="outline"
+              className="bg-yellow-50 hover:bg-yellow-100 border-yellow-200 text-yellow-700"
+              data-testid="button-undo-clear"
+            >
+              <Undo2 className="w-4 h-4 ml-2" />
+              تراجع
+            </Button>
+          )}
+
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="bg-red-50 hover:bg-red-100 border-red-200 text-red-700"
+                disabled={missions.length === 0}
+                data-testid="button-delete-all"
+              >
+                <Trash2 className="w-4 h-4 ml-2" />
+                حذف الكل
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  تأكيد حذف جميع المأموريات
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-right">
+                  سيتم حذف جميع المأموريات ({missions.length}) بشكل نهائي. 
+                  <br /><br />
+                  <strong>ننصح بتصدير البيانات إلى Excel قبل الحذف للنسخ الاحتياطي.</strong>
+                  <br /><br />
+                  اكتب <code className="bg-gray-100 px-1 rounded">حذف الكل</code> للتأكيد:
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="py-4">
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="اكتب: حذف الكل"
+                  className="text-center"
+                  data-testid="input-confirm-delete-all"
+                />
+              </div>
+              <AlertDialogFooter className="flex gap-2">
+                <AlertDialogCancel
+                  onClick={() => {
+                    setDeleteConfirmText('');
+                    setShowDeleteDialog(false);
+                  }}
+                >
+                  إلغاء
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteAll}
+                  disabled={deleteConfirmText !== 'حذف الكل' || clearLoading}
+                  className="bg-red-600 hover:bg-red-700"
+                  data-testid="button-confirm-delete-all"
+                >
+                  {clearLoading ? (
+                    <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 ml-2" />
+                  )}
+                  تأكيد الحذف
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           <Button
             onClick={createNewMissionAction}
