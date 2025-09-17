@@ -86,11 +86,167 @@ const detailedExportTypeMapping: Record<string, string> = {
   'ضيافة': 'hospitality'
 };
 
-// Helper to get Arabic day name
-const getArabicDayName = (dateString: string): string => {
+// Utility to normalize Arabic-Indic digits to regular digits
+function normalizeArabicDigits(str: string): string {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[٠-٩]/g, (d) => {
+    return String.fromCharCode(d.charCodeAt(0) - '٠'.charCodeAt(0) + '0'.charCodeAt(0));
+  });
+}
+
+// Helper to format date parts to ISO string safely (no timezone shift)
+function formatDateParts(year: number, month: number, day: number): string {
+  const paddedMonth = month.toString().padStart(2, '0');
+  const paddedDay = day.toString().padStart(2, '0');
+  return `${year}-${paddedMonth}-${paddedDay}`;
+}
+
+// Convert Excel serial date number to ISO date string (avoiding timezone issues)
+function excelSerialToISODate(serial: number): string {
+  // Excel uses 1900-01-01 as base date, but has a leap year bug for 1900
+  // Days since 1899-12-30 (correcting for Excel's bug)
+  const baseDate = new Date(Date.UTC(1899, 11, 30)); // December 30, 1899 UTC
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  const targetDate = new Date(baseDate.getTime() + serial * millisecondsPerDay);
+  
+  // Extract date parts from UTC to avoid timezone shifts
+  const year = targetDate.getUTCFullYear();
+  const month = targetDate.getUTCMonth() + 1;
+  const day = targetDate.getUTCDate();
+  
+  return formatDateParts(year, month, day);
+}
+
+// Robust date parser that handles multiple formats (timezone-safe)
+function tryParseDate(input: any): string | null {
+  if (!input) return null;
+  
+  // If it's already a Date object, extract local date parts (timezone-safe)
+  if (input instanceof Date) {
+    const year = input.getFullYear();
+    const month = input.getMonth() + 1;
+    const day = input.getDate();
+    return formatDateParts(year, month, day);
+  }
+  
+  // If it's a number (Excel serial date)
+  if (typeof input === 'number') {
+    try {
+      return excelSerialToISODate(input);
+    } catch {
+      return null;
+    }
+  }
+  
+  // If it's a string, try various formats
+  if (typeof input === 'string') {
+    // Normalize Arabic digits and trim whitespace
+    const normalized = normalizeArabicDigits(input.trim());
+    
+    // Try common date formats
+    const formats = [
+      /^(\d{4})-(\d{1,2})-(\d{1,2})$/, // yyyy-MM-dd or yyyy-M-d
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, // dd/MM/yyyy or MM/dd/yyyy (ambiguous, will be disambiguated)
+      /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/, // dd/MM/yy or d/M/yy
+      /^(\d{1,2})-(\d{1,2})-(\d{4})$/, // dd-MM-yyyy or d-M-yyyy
+      /^(\d{1,2})-(\d{1,2})-(\d{2})$/, // dd-MM-yy or d-M-yy
+      /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, // yyyy/MM/dd or yyyy/M/d
+      /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/, // dd.MM.yyyy or d.M.yyyy
+      /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/, // yyyy.MM.dd
+    ];
+    
+    for (const format of formats) {
+      const match = normalized.match(format);
+      if (match) {
+        let year: number, month: number, day: number;
+        
+        if (format.source.startsWith('^(\\d{4})')) {
+          // Year first format (yyyy-MM-dd, yyyy/MM/dd, yyyy.MM.dd)
+          year = parseInt(match[1]);
+          month = parseInt(match[2]);
+          day = parseInt(match[3]);
+        } else if (format.source.includes('\\/(\\d{4})$')) {
+          // Could be dd/MM/yyyy or MM/dd/yyyy - need to determine which
+          const part1 = parseInt(match[1]);
+          const part2 = parseInt(match[2]);
+          year = parseInt(match[3]);
+          
+          // Heuristic: if first part > 12, it's probably day/month/year
+          // If second part > 12, it's probably month/day/year
+          // Otherwise assume day/month/year (international standard)
+          if (part1 > 12) {
+            day = part1;
+            month = part2;
+          } else if (part2 > 12) {
+            month = part1;
+            day = part2;
+          } else {
+            // Default to day/month/year for ambiguous cases
+            day = part1;
+            month = part2;
+          }
+        } else {
+          // Other Day/Month first formats
+          day = parseInt(match[1]);
+          month = parseInt(match[2]);
+          year = parseInt(match[3]);
+          
+          // Handle 2-digit years
+          if (year < 100) {
+            year += year > 50 ? 1900 : 2000;
+          }
+        }
+        
+        // Validate date components
+        if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          try {
+            const date = new Date(year, month - 1, day);
+            // Check if the date is valid (month/day weren't out of range)
+            if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
+              return formatDateParts(year, month, day);
+            }
+          } catch {
+            // Continue to next format
+          }
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Helper to get Arabic day name from Date object or ISO string (timezone-safe)
+const getArabicDayName = (dateInput: string | Date | null): string => {
+  if (!dateInput) return '';
+  
   const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-  const date = new Date(dateString);
-  return days[date.getDay()];
+  
+  try {
+    let date: Date;
+    
+    if (dateInput instanceof Date) {
+      date = dateInput;
+    } else if (typeof dateInput === 'string') {
+      // For ISO string format "YYYY-MM-DD", construct date using local timezone
+      const match = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (match) {
+        const year = parseInt(match[1]);
+        const month = parseInt(match[2]) - 1; // Month is 0-indexed
+        const day = parseInt(match[3]);
+        date = new Date(year, month, day);
+      } else {
+        // Fallback for other string formats
+        date = new Date(dateInput);
+      }
+    } else {
+      return '';
+    }
+    
+    return days[date.getDay()] || '';
+  } catch {
+    return '';
+  }
 };
 
 export function exportMissionsToExcel(missions: Mission[]): void {
@@ -318,7 +474,7 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
 
     // Read the file
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
     
     // Check if missions sheet exists
     const missionSheetName = workbook.SheetNames.find(name => 
@@ -364,7 +520,12 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           const employeeName = String((row as any)['اسم الموظف'] || (row as any)['الموظف'] || '').trim();
           const employeeCode = parseInt((row as any)['كود الموظف'] || (row as any)['الكود']) || 0;
           const employeeBranch = String((row as any)['الفرع'] || (row as any)['فرع'] || '').trim();
-          const missionDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'] || new Date().toISOString().split('T')[0];
+          const rawDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'];
+          const parsedDate = tryParseDate(rawDate);
+          const missionDate = parsedDate || new Date().toISOString().split('T')[0];
+          if (rawDate && !parsedDate) {
+            console.warn(`تعذر تحليل التاريخ: ${rawDate}, استخدام تاريخ اليوم بدلاً من ذلك`);
+          }
           const statement = String((row as any)['بيـــــــــــــــــــــــان'] || (row as any)['البيان'] || (row as any)['وصف'] || '').trim();
           
           const expensesByType: Record<string, { amount: number; banks: string[]; bankAllocations: Record<string, number> }> = {};
@@ -441,7 +602,12 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           const employeeName = String((row as any)['اسم الموظف'] || (row as any)['الموظف'] || '').trim();
           const employeeCode = parseInt((row as any)['كود الموظف'] || (row as any)['الكود']) || 0;
           const employeeBranch = String((row as any)['الفرع'] || (row as any)['فرع'] || '').trim();
-          const missionDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'] || new Date().toISOString().split('T')[0];
+          const rawDate = (row as any)['تاريخ المأمورية'] || (row as any)['التاريخ'];
+          const parsedDate = tryParseDate(rawDate);
+          const missionDate = parsedDate || new Date().toISOString().split('T')[0];
+          if (rawDate && !parsedDate) {
+            console.warn(`تعذر تحليل التاريخ: ${rawDate}, استخدام تاريخ اليوم بدلاً من ذلك`);
+          }
           const bank = (row as any)['البنك'] || (row as any)['بنك'] || null;
           const statement = (row as any)['البيان'] || (row as any)['وصف'] || null;
           const totalAmount = parseFloat((row as any)['إجمالي المصروفات'] || (row as any)['الإجمالي'] || '0') || 0;
