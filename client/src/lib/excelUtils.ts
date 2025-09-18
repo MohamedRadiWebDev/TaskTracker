@@ -228,13 +228,15 @@ const getArabicDayName = (dateInput: string | Date | null): string => {
     if (dateInput instanceof Date) {
       date = dateInput;
     } else if (typeof dateInput === 'string') {
-      // For ISO string format "YYYY-MM-DD", construct date using local timezone
+      // For ISO string format "YYYY-MM-DD", construct date using UTC to avoid timezone shifts
       const match = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (match) {
         const year = parseInt(match[1]);
         const month = parseInt(match[2]) - 1; // Month is 0-indexed
         const day = parseInt(match[3]);
-        date = new Date(year, month, day);
+        date = new Date(Date.UTC(year, month, day));
+        // Use UTC day getter since we constructed with UTC
+        return days[date.getUTCDay()] || '';
       } else {
         // Fallback for other string formats
         date = new Date(dateInput);
@@ -472,9 +474,9 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
       };
     }
 
-    // Read the file
+    // Read the file without cellDates to avoid timezone shifts
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+    const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: false });
     
     // Check if missions sheet exists
     const missionSheetName = workbook.SheetNames.find(name => 
