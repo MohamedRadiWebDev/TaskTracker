@@ -3,7 +3,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Calendar, Download, FileText, Loader2 } from 'lucide-react';
+import { Calendar, Download, FileText, Loader2, UserCircle } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { useMissions } from '../hooks/use-missions';
 import * as XLSX from 'xlsx';
@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 export default function PeriodReport() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [employeeCode, setEmployeeCode] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
   const { missions } = useMissions();
@@ -36,12 +37,23 @@ export default function PeriodReport() {
 
     setIsExporting(true);
     try {
-      // Filter missions by date range
+      // Filter missions by date range and optional employee code
       const filteredMissions = missions.filter(mission => {
         const missionDate = new Date(mission.missionDate);
         const from = new Date(fromDate);
         const to = new Date(toDate);
-        return missionDate >= from && missionDate <= to;
+        const dateInRange = missionDate >= from && missionDate <= to;
+        
+        // If employee code is provided, filter by it as well
+        if (employeeCode && employeeCode.trim() !== '') {
+          const codeFilter = parseInt(employeeCode.trim());
+          // Skip code filtering if parsing failed (NaN guard)
+          if (!isNaN(codeFilter)) {
+            return dateInRange && mission.employeeCode === codeFilter;
+          }
+        }
+        
+        return dateInRange;
       });
 
       if (filteredMissions.length === 0) {
@@ -219,12 +231,17 @@ export default function PeriodReport() {
       XLSX.utils.book_append_sheet(workbook, mainSheet, 'تقرير الفترة');
 
       // Export file
-      const filename = `period-report-${fromDate}-to-${toDate}.xlsx`;
+      const employeeCodeSuffix = employeeCode && employeeCode.trim() !== '' ? `-employee-${employeeCode.trim()}` : '';
+      const filename = `period-report-${fromDate}-to-${toDate}${employeeCodeSuffix}.xlsx`;
       XLSX.writeFile(workbook, filename);
+
+      const exportMessage = employeeCode && employeeCode.trim() !== '' 
+        ? `تم تصدير تقرير الفترة للموظف كود ${employeeCode} من ${fromDate} إلى ${toDate}`
+        : `تم تصدير تقرير الفترة من ${fromDate} إلى ${toDate}`;
 
       toast({
         title: "تم تصدير التقرير بنجاح",
-        description: `تم تصدير تقرير الفترة من ${fromDate} إلى ${toDate}`,
+        description: exportMessage,
       });
     } catch (error) {
       console.error('Period report export error:', error);
@@ -284,6 +301,25 @@ export default function PeriodReport() {
             </div>
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="employee-code" className="text-right flex items-center">
+              <UserCircle className="w-4 h-4 ml-2" />
+              كود الموظف (اختياري)
+            </Label>
+            <Input
+              id="employee-code"
+              type="number"
+              value={employeeCode}
+              onChange={(e) => setEmployeeCode(e.target.value)}
+              placeholder="أدخل كود الموظف للتصفية حسب موظف معين"
+              className="text-right"
+              data-testid="input-employee-code"
+            />
+            <p className="text-sm text-muted-foreground text-right">
+              اتركه فارغاً لإنشاء تقرير لجميع الموظفين
+            </p>
+          </div>
+
           <div className="flex justify-center">
             <Button
               onClick={handleExport}
@@ -311,7 +347,7 @@ export default function PeriodReport() {
                 معاينة التقرير:
               </h3>
               <p className="text-blue-700 dark:text-blue-300 text-sm">
-                سيتم تصدير إجمالي مصروفات جميع الموظفين من <strong>{fromDate}</strong> إلى <strong>{toDate}</strong>
+                سيتم تصدير إجمالي مصروفات {employeeCode && employeeCode.trim() !== '' ? `الموظف كود ${employeeCode}` : 'جميع الموظفين'} من <strong>{fromDate}</strong> إلى <strong>{toDate}</strong>
                 <br />
                 التقرير سيحتوي على: اسم الموظف، الكود، الفرع، البنك/الشركة، وإجمالي كل بند مصروف
               </p>
