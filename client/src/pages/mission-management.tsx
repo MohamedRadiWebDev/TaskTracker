@@ -251,17 +251,22 @@ export default function MissionManagement() {
 
   // Expense management functions (local only)
   const addExpenseItem = useCallback((type: string) => {
+    // Get banks from the first expense item if exists
+    const firstExpenseBanks = localExpenses.length > 0 && localExpenses[0].banks 
+      ? [...localExpenses[0].banks] 
+      : [];
+
     const newExpense: ExpenseItem = {
       id: `expense-${expenseCounter}`,
       type,
       amount: 0,
-      banks: []
+      banks: firstExpenseBanks
     };
 
     setLocalExpenses(prev => [...prev, newExpense]);
     setHasUnsavedChanges(true);
     setExpenseCounter(prev => prev + 1);
-  }, [expenseCounter]);
+  }, [expenseCounter, localExpenses]);
 
   const updateExpenseItem = useCallback((id: string, updates: Partial<ExpenseItem>) => {
     setLocalExpenses(prev => prev.map((expense: ExpenseItem) =>
