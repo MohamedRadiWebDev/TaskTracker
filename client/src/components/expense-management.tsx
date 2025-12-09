@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -97,6 +97,20 @@ export default function ExpenseManagement({
       return aSelected ? -1 : 1;
     });
   }, [banks, primarySelectedBanks]);
+
+  // Preserve scroll position for each bank list when selections reorder the list
+  const bankListRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const pendingScrollPositions = useRef<Record<string, number>>({});
+
+  useLayoutEffect(() => {
+    Object.entries(pendingScrollPositions.current).forEach(([expenseId, scrollTop]) => {
+      const container = bankListRefs.current[expenseId];
+      if (container) {
+        container.scrollTop = scrollTop;
+      }
+    });
+    pendingScrollPositions.current = {};
+  }, [expenses, sortedBanks]);
 
   // Track display values for formula inputs
   const [displayValues, setDisplayValues] = useState<Record<string, string>>({});
@@ -252,7 +266,10 @@ export default function ExpenseManagement({
                 <Label className="block text-sm font-medium text-foreground mb-2">
                   البنوك المحددة
                 </Label>
-                <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3">
+                <div
+                  ref={(el) => { bankListRefs.current[expense.id] = el; }}
+                  className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3"
+                >
                   {sortedBanks.map((bank) => {
                     const isChecked = expense.banks ? expense.banks.includes(bank.name) : false;
                     return (
@@ -261,11 +278,16 @@ export default function ExpenseManagement({
                           id={`bank-${expense.id}-${bank.id}`}
                           checked={isChecked}
                           onCheckedChange={(checked) => {
+                            const container = bankListRefs.current[expense.id];
+                            if (container) {
+                              pendingScrollPositions.current[expense.id] = container.scrollTop;
+                            }
+
                             const currentBanks = expense.banks || [];
                             const updatedBanks = checked
                               ? [...currentBanks, bank.name]
                               : currentBanks.filter(b => b !== bank.name);
-                            onUpdateExpense(expense.id, { 
+                            onUpdateExpense(expense.id, {
                               banks: updatedBanks,
                               bankAllocations: undefined // Clear custom allocations when banks change
                             });
