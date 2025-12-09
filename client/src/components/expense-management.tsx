@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -84,7 +84,34 @@ export default function ExpenseManagement({
   onRemoveExpense
 }: ExpenseManagementProps) {
   const { banks } = useBanks();
-  
+
+  // Keep banks selected in the first expense at the top of the list
+  const primarySelectedBanks = expenses[0]?.banks || [];
+  const sortedBanks = useMemo(() => {
+    const selectedSet = new Set(primarySelectedBanks);
+    return [...banks].sort((a, b) => {
+      const aSelected = selectedSet.has(a.name);
+      const bSelected = selectedSet.has(b.name);
+
+      if (aSelected === bSelected) return 0;
+      return aSelected ? -1 : 1;
+    });
+  }, [banks, primarySelectedBanks]);
+
+  // Preserve scroll position for each bank list when selections reorder the list
+  const bankListRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const pendingScrollPositions = useRef<Record<string, number>>({});
+
+  useLayoutEffect(() => {
+    Object.entries(pendingScrollPositions.current).forEach(([expenseId, scrollTop]) => {
+      const container = bankListRefs.current[expenseId];
+      if (container) {
+        container.scrollTop = scrollTop;
+      }
+    });
+    pendingScrollPositions.current = {};
+  }, [expenses, sortedBanks]);
+
   // Track display values for formula inputs
   const [displayValues, setDisplayValues] = useState<Record<string, string>>({});
 
@@ -239,8 +266,11 @@ export default function ExpenseManagement({
                 <Label className="block text-sm font-medium text-foreground mb-2">
                   البنوك المحددة
                 </Label>
-                <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3">
-                  {banks.map((bank) => {
+                <div
+                  ref={(el) => { bankListRefs.current[expense.id] = el; }}
+                  className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3"
+                >
+                  {sortedBanks.map((bank) => {
                     const isChecked = expense.banks ? expense.banks.includes(bank.name) : false;
                     return (
                       <div key={bank.id} className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -248,11 +278,16 @@ export default function ExpenseManagement({
                           id={`bank-${expense.id}-${bank.id}`}
                           checked={isChecked}
                           onCheckedChange={(checked) => {
+                            const container = bankListRefs.current[expense.id];
+                            if (container) {
+                              pendingScrollPositions.current[expense.id] = container.scrollTop;
+                            }
+
                             const currentBanks = expense.banks || [];
                             const updatedBanks = checked
                               ? [...currentBanks, bank.name]
                               : currentBanks.filter(b => b !== bank.name);
-                            onUpdateExpense(expense.id, { 
+                            onUpdateExpense(expense.id, {
                               banks: updatedBanks,
                               bankAllocations: undefined // Clear custom allocations when banks change
                             });
@@ -268,7 +303,7 @@ export default function ExpenseManagement({
                       </div>
                     );
                   })}
-                  {banks.length === 0 && (
+                  {sortedBanks.length === 0 && (
                     <div className="text-sm text-muted-foreground text-center py-2">
                       لا توجد بنوك متاحة
                     </div>
