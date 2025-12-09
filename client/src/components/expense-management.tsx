@@ -102,6 +102,9 @@ export default function ExpenseManagement({
   const bankListRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const pendingScrollPositions = useRef<Record<string, number>>({});
 
+  // Quick filters per expense to make bank selection easier
+  const [bankSearchTerms, setBankSearchTerms] = useState<Record<string, string>>({});
+
   useLayoutEffect(() => {
     Object.entries(pendingScrollPositions.current).forEach(([expenseId, scrollTop]) => {
       const container = bankListRefs.current[expenseId];
@@ -155,11 +158,15 @@ export default function ExpenseManagement({
 
       {/* Expense Items */}
       <div className="space-y-4 mb-8">
-        {expenses.map((expense, index) => (
-          <Card 
-            key={expense.id} 
-            className="expense-item p-4 bg-muted border fade-in"
-          >
+        {expenses.map((expense, index) => {
+          const searchTerm = (bankSearchTerms[expense.id] || '').toLowerCase();
+          const filteredBanks = sortedBanks.filter(bank => bank.name.toLowerCase().includes(searchTerm));
+
+          return (
+            <Card
+              key={expense.id}
+              className="expense-item p-4 bg-muted border fade-in"
+            >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
@@ -261,16 +268,78 @@ export default function ExpenseManagement({
                   data-testid={`input-amount-${expense.id}`}
                 />
               </div>
-              
+
               <div>
                 <Label className="block text-sm font-medium text-foreground mb-2">
                   البنوك المحددة
                 </Label>
+                <Input
+                  type="text"
+                  placeholder="ابحث عن بنك أو شركة"
+                  value={bankSearchTerms[expense.id] || ''}
+                  onChange={(e) => {
+                    setBankSearchTerms(prev => ({
+                      ...prev,
+                      [expense.id]: e.target.value
+                    }));
+                  }}
+                  className="mb-3"
+                />
+                <div className="flex gap-2 mb-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const container = bankListRefs.current[expense.id];
+                      if (container) {
+                        pendingScrollPositions.current[expense.id] = container.scrollTop;
+                      }
+
+                      const filteredBanks = sortedBanks
+                        .filter(bank => bank.name.toLowerCase().includes((bankSearchTerms[expense.id] || '').toLowerCase()));
+                      const currentBanks = new Set(expense.banks || []);
+                      filteredBanks.forEach(bank => currentBanks.add(bank.name));
+                      onUpdateExpense(expense.id, {
+                        banks: Array.from(currentBanks),
+                        bankAllocations: undefined
+                      });
+                    }}
+                  >
+                    تحديد الكل
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const container = bankListRefs.current[expense.id];
+                      if (container) {
+                        pendingScrollPositions.current[expense.id] = container.scrollTop;
+                      }
+
+                      const filteredNames = new Set(
+                        sortedBanks
+                          .filter(bank => bank.name.toLowerCase().includes((bankSearchTerms[expense.id] || '').toLowerCase()))
+                          .map(bank => bank.name)
+                      );
+
+                      const remainingBanks = (expense.banks || []).filter(name => !filteredNames.has(name));
+                      onUpdateExpense(expense.id, {
+                        banks: remainingBanks,
+                        bankAllocations: undefined
+                      });
+                    }}
+                  >
+                    مسح التحديد
+                  </Button>
+                </div>
                 <div
                   ref={(el) => { bankListRefs.current[expense.id] = el; }}
                   className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3"
                 >
-                  {sortedBanks.map((bank) => {
+                  {filteredBanks
+                    .map((bank) => {
                     const isChecked = expense.banks ? expense.banks.includes(bank.name) : false;
                     return (
                       <div key={bank.id} className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -303,7 +372,7 @@ export default function ExpenseManagement({
                       </div>
                     );
                   })}
-                  {sortedBanks.length === 0 && (
+                  {filteredBanks.length === 0 && (
                     <div className="text-sm text-muted-foreground text-center py-2">
                       لا توجد بنوك متاحة
                     </div>
@@ -317,7 +386,8 @@ export default function ExpenseManagement({
               </div>
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {/* Totals Display */}
