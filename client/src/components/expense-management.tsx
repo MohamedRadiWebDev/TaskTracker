@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -84,7 +84,37 @@ export default function ExpenseManagement({
   onRemoveExpense
 }: ExpenseManagementProps) {
   const { banks } = useBanks();
-  
+
+  // Keep banks selected in the first expense at the top of the list
+  const primarySelectedBanks = expenses[0]?.banks || [];
+  const sortedBanks = useMemo(() => {
+    const selectedSet = new Set(primarySelectedBanks);
+    return [...banks].sort((a, b) => {
+      const aSelected = selectedSet.has(a.name);
+      const bSelected = selectedSet.has(b.name);
+
+      if (aSelected === bSelected) return 0;
+      return aSelected ? -1 : 1;
+    });
+  }, [banks, primarySelectedBanks]);
+
+  // Preserve scroll position for each bank list when selections reorder the list
+  const bankListRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const pendingScrollPositions = useRef<Record<string, number>>({});
+
+  // Quick filters per expense to make bank selection easier
+  const [bankSearchTerms, setBankSearchTerms] = useState<Record<string, string>>({});
+
+  useLayoutEffect(() => {
+    Object.entries(pendingScrollPositions.current).forEach(([expenseId, scrollTop]) => {
+      const container = bankListRefs.current[expenseId];
+      if (container) {
+        container.scrollTop = scrollTop;
+      }
+    });
+    pendingScrollPositions.current = {};
+  }, [expenses, sortedBanks]);
+
   // Track display values for formula inputs
   const [displayValues, setDisplayValues] = useState<Record<string, string>>({});
 
@@ -128,11 +158,15 @@ export default function ExpenseManagement({
 
       {/* Expense Items */}
       <div className="space-y-4 mb-8">
-        {expenses.map((expense, index) => (
-          <Card 
-            key={expense.id} 
-            className="expense-item p-4 bg-muted border fade-in"
-          >
+        {expenses.map((expense, index) => {
+          const searchTerm = (bankSearchTerms[expense.id] || '').toLowerCase();
+          const filteredBanks = sortedBanks.filter(bank => bank.name.toLowerCase().includes(searchTerm));
+
+          return (
+            <Card
+              key={expense.id}
+              className="expense-item p-4 bg-muted border fade-in"
+            >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
@@ -234,13 +268,78 @@ export default function ExpenseManagement({
                   data-testid={`input-amount-${expense.id}`}
                 />
               </div>
-              
+
               <div>
                 <Label className="block text-sm font-medium text-foreground mb-2">
                   البنوك المحددة
                 </Label>
-                <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3">
-                  {banks.map((bank) => {
+                <Input
+                  type="text"
+                  placeholder="ابحث عن بنك أو شركة"
+                  value={bankSearchTerms[expense.id] || ''}
+                  onChange={(e) => {
+                    setBankSearchTerms(prev => ({
+                      ...prev,
+                      [expense.id]: e.target.value
+                    }));
+                  }}
+                  className="mb-3"
+                />
+                <div className="flex gap-2 mb-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const container = bankListRefs.current[expense.id];
+                      if (container) {
+                        pendingScrollPositions.current[expense.id] = container.scrollTop;
+                      }
+
+                      const filteredBanks = sortedBanks
+                        .filter(bank => bank.name.toLowerCase().includes((bankSearchTerms[expense.id] || '').toLowerCase()));
+                      const currentBanks = new Set(expense.banks || []);
+                      filteredBanks.forEach(bank => currentBanks.add(bank.name));
+                      onUpdateExpense(expense.id, {
+                        banks: Array.from(currentBanks),
+                        bankAllocations: undefined
+                      });
+                    }}
+                  >
+                    تحديد الكل
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const container = bankListRefs.current[expense.id];
+                      if (container) {
+                        pendingScrollPositions.current[expense.id] = container.scrollTop;
+                      }
+
+                      const filteredNames = new Set(
+                        sortedBanks
+                          .filter(bank => bank.name.toLowerCase().includes((bankSearchTerms[expense.id] || '').toLowerCase()))
+                          .map(bank => bank.name)
+                      );
+
+                      const remainingBanks = (expense.banks || []).filter(name => !filteredNames.has(name));
+                      onUpdateExpense(expense.id, {
+                        banks: remainingBanks,
+                        bankAllocations: undefined
+                      });
+                    }}
+                  >
+                    مسح التحديد
+                  </Button>
+                </div>
+                <div
+                  ref={(el) => { bankListRefs.current[expense.id] = el; }}
+                  className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3"
+                >
+                  {filteredBanks
+                    .map((bank) => {
                     const isChecked = expense.banks ? expense.banks.includes(bank.name) : false;
                     return (
                       <div key={bank.id} className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -248,11 +347,16 @@ export default function ExpenseManagement({
                           id={`bank-${expense.id}-${bank.id}`}
                           checked={isChecked}
                           onCheckedChange={(checked) => {
+                            const container = bankListRefs.current[expense.id];
+                            if (container) {
+                              pendingScrollPositions.current[expense.id] = container.scrollTop;
+                            }
+
                             const currentBanks = expense.banks || [];
                             const updatedBanks = checked
                               ? [...currentBanks, bank.name]
                               : currentBanks.filter(b => b !== bank.name);
-                            onUpdateExpense(expense.id, { 
+                            onUpdateExpense(expense.id, {
                               banks: updatedBanks,
                               bankAllocations: undefined // Clear custom allocations when banks change
                             });
@@ -268,7 +372,7 @@ export default function ExpenseManagement({
                       </div>
                     );
                   })}
-                  {banks.length === 0 && (
+                  {filteredBanks.length === 0 && (
                     <div className="text-sm text-muted-foreground text-center py-2">
                       لا توجد بنوك متاحة
                     </div>
@@ -282,7 +386,8 @@ export default function ExpenseManagement({
               </div>
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {/* Totals Display */}
