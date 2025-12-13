@@ -6,12 +6,43 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Checkbox } from "../components/ui/checkbox";
 import { Label } from "../components/ui/label";
-import { CalendarRange, ClipboardList, Filter, RefreshCw, Search } from "lucide-react";
+import {
+  CalendarRange,
+  Check,
+  ChevronDown,
+  ClipboardList,
+  Filter,
+  RefreshCw,
+  Search
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from "../components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem
+} from "../components/ui/command";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "../components/ui/dialog";
+import type { Mission } from "../types/schema";
 
 export default function TaskSearch() {
   const { missions, isLoading } = useMissions();
   const [codeQuery, setCodeQuery] = useState("");
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [activeMission, setActiveMission] = useState<Mission | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   const uniqueDates = useMemo(() => {
     const dates = Array.from(new Set(missions.map((mission) => mission.missionDate)));
@@ -32,6 +63,11 @@ export default function TaskSearch() {
     setSelectedDates((prev) =>
       prev.includes(date) ? prev.filter((d) => d !== date) : [...prev, date]
     );
+  };
+
+  const openMissionDetails = (mission: Mission) => {
+    setActiveMission(mission);
+    setIsDetailsOpen(true);
   };
 
   const clearFilters = () => {
@@ -82,26 +118,58 @@ export default function TaskSearch() {
               <CalendarRange className="w-4 h-4" />
               تصفية حسب التاريخ (يمكن اختيار أكثر من تاريخ)
             </Label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {uniqueDates.map((date) => (
-                <label
-                  key={date}
-                  className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-muted cursor-pointer"
+            <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={isDatePickerOpen}
+                  className="w-full justify-between"
                 >
-                  <Checkbox
-                    checked={selectedDates.includes(date)}
-                    onCheckedChange={() => toggleDate(date)}
-                    aria-label={`اختر تاريخ ${date}`}
-                  />
-                  <span className="text-sm font-medium">{date}</span>
-                </label>
-              ))}
-              {uniqueDates.length === 0 && (
-                <div className="col-span-2 text-sm text-muted-foreground">
-                  لا توجد تواريخ متاحة حاليًا
-                </div>
-              )}
-            </div>
+                  <div className="flex flex-wrap gap-2 text-right">
+                    {selectedDates.length > 0 ? (
+                      selectedDates.map((date) => (
+                        <Badge key={date} variant="secondary" className="text-xs">
+                          {date}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground">اختر التواريخ المطلوبة</span>
+                    )}
+                  </div>
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[340px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="ابحث عن تاريخ..." className="text-right" />
+                  <CommandEmpty>لا توجد تواريخ مطابقة</CommandEmpty>
+                  <CommandGroup>
+                    {uniqueDates.map((date) => {
+                      const isSelected = selectedDates.includes(date);
+                      return (
+                        <CommandItem
+                          key={date}
+                          value={date}
+                          onSelect={() => toggleDate(date)}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleDate(date)}
+                              aria-label={`اختر تاريخ ${date}`}
+                            />
+                            <span className="text-sm font-medium">{date}</span>
+                          </div>
+                          {isSelected && <Check className="h-4 w-4 text-primary" />}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
@@ -127,7 +195,19 @@ export default function TaskSearch() {
           </Card>
         ) : (
           filteredMissions.map((mission) => (
-            <Card key={mission.id} className="p-4">
+            <Card
+              key={mission.id}
+              className="p-4 cursor-pointer transition hover:border-primary/50"
+              role="button"
+              tabIndex={0}
+              onClick={() => openMissionDetails(mission)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openMissionDetails(mission);
+                }
+              }}
+            >
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -156,6 +236,96 @@ export default function TaskSearch() {
           ))
         )}
       </div>
+
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>تفاصيل المأمورية</DialogTitle>
+            <DialogDescription>
+              استعرض بيانات المأمورية والمصروفات المرتبطة بها
+            </DialogDescription>
+          </DialogHeader>
+
+          {activeMission && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg border p-3 space-y-2">
+                  <p className="text-sm text-muted-foreground">الموظف</p>
+                  <p className="font-semibold text-foreground">
+                    {activeMission.employeeName} (كود: {activeMission.employeeCode})
+                  </p>
+                  <p className="text-sm text-muted-foreground">الفرع: {activeMission.employeeBranch}</p>
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CalendarRange className="h-4 w-4" />
+                    <p className="text-sm text-muted-foreground">تاريخ المأمورية</p>
+                  </div>
+                  <p className="font-semibold text-foreground">{activeMission.missionDate}</p>
+                  {activeMission.bank && (
+                    <p className="text-sm text-muted-foreground">البنك: {activeMission.bank}</p>
+                  )}
+                </div>
+              </div>
+
+              {activeMission.statement && (
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm text-muted-foreground mb-1">سبب المأمورية</p>
+                  <p className="text-foreground">{activeMission.statement}</p>
+                </div>
+              )}
+
+              <div className="rounded-lg border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-foreground">المصروفات</p>
+                  <p className="text-sm text-muted-foreground">
+                    إجمالي المبلغ: {activeMission.totalAmount} جنيه
+                  </p>
+                </div>
+
+                {activeMission.expenses && activeMission.expenses.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-muted-foreground">
+                          <th className="py-2 px-1">البند</th>
+                          <th className="py-2 px-1">المبلغ</th>
+                          <th className="py-2 px-1">البنوك</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeMission.expenses.map((expense) => (
+                          <tr key={expense.id} className="border-t">
+                            <td className="py-2 px-1 text-foreground">{expense.type}</td>
+                            <td className="py-2 px-1">{expense.amount} جنيه</td>
+                            <td className="py-2 px-1">
+                              <div className="flex flex-wrap gap-1">
+                                {expense.banks.map((bank) => (
+                                  <Badge key={bank} variant="outline">
+                                    {bank}
+                                    {expense.bankAllocations?.[bank]
+                                      ? ` - ${expense.bankAllocations[bank]}`
+                                      : ""}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    لا توجد مصروفات مسجلة لهذه المأمورية
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
