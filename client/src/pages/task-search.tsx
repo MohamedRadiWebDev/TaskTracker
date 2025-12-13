@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMissions } from "../hooks/use-missions";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -43,11 +43,50 @@ export default function TaskSearch() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [dateSearch, setDateSearch] = useState("");
 
-  const uniqueDates = useMemo(() => {
-    const dates = Array.from(new Set(missions.map((mission) => mission.missionDate)));
+  const availableDates = useMemo(() => {
+    const normalizedQuery = codeQuery.trim();
+    const relevantMissions =
+      normalizedQuery === ""
+        ? missions
+        : missions.filter((mission) => mission.employeeCode.toString().includes(normalizedQuery));
+
+    const dates = Array.from(new Set(relevantMissions.map((mission) => mission.missionDate)));
     return dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-  }, [missions]);
+  }, [missions, codeQuery]);
+
+  const groupedDates = useMemo(() => {
+    const groups: Record<string, { label: string; dates: string[]; sortValue: number }> = {};
+
+    availableDates.forEach((date) => {
+      const dateObj = new Date(date);
+      const monthKey = `${dateObj.getFullYear()}-${dateObj.getMonth()}`;
+      const sortValue = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1).getTime();
+      const label = dateObj.toLocaleDateString("ar-EG", { month: "long", year: "numeric" });
+      if (!groups[monthKey]) {
+        groups[monthKey] = { label, dates: [], sortValue };
+      }
+      groups[monthKey].dates.push(date);
+    });
+
+    return Object.entries(groups)
+      .sort((a, b) => b[1].sortValue - a[1].sortValue)
+      .map(([monthKey, { label, dates, sortValue }]) => ({
+        monthKey,
+        label,
+        sortValue,
+        dates: dates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime()),
+      }));
+  }, [availableDates]);
+
+  const hasVisibleDates = useMemo(() => {
+    const query = dateSearch.trim();
+    return groupedDates.some(({ label, dates }) =>
+      dates.some((date) => (query === "" ? true : date.includes(query) || label.includes(query)))
+    );
+  }, [groupedDates, dateSearch]);
 
   const filteredMissions = useMemo(() => {
     const normalizedQuery = codeQuery.trim();
@@ -63,6 +102,31 @@ export default function TaskSearch() {
     setSelectedDates((prev) =>
       prev.includes(date) ? prev.filter((d) => d !== date) : [...prev, date]
     );
+  };
+
+  useEffect(() => {
+    setSelectedDates((prev) => prev.filter((date) => availableDates.includes(date)));
+  }, [availableDates]);
+
+  useEffect(() => {
+    if (dateSearch.trim() !== "") {
+      const allMonths = groupedDates.map((group) => group.monthKey);
+      setExpandedMonths(new Set(allMonths));
+    } else {
+      setExpandedMonths(new Set());
+    }
+  }, [dateSearch, groupedDates]);
+
+  const toggleMonth = (monthKey: string) => {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(monthKey)) {
+        next.delete(monthKey);
+      } else {
+        next.add(monthKey);
+      }
+      return next;
+    });
   };
 
   const openMissionDetails = (mission: Mission) => {
@@ -142,31 +206,75 @@ export default function TaskSearch() {
               </PopoverTrigger>
               <PopoverContent className="w-[340px] p-0" align="start">
                 <Command>
-                  <CommandInput placeholder="ابحث عن تاريخ..." className="text-right" />
+                  <CommandInput
+                    placeholder="ابحث عن تاريخ..."
+                    className="text-right"
+                    value={dateSearch}
+                    onValueChange={setDateSearch}
+                  />
                   <CommandEmpty>لا توجد تواريخ مطابقة</CommandEmpty>
-                  <CommandGroup>
-                    {uniqueDates.map((date) => {
-                      const isSelected = selectedDates.includes(date);
+                  <div className="max-h-80 overflow-y-auto py-1">
+                    {!hasVisibleDates && (
+                      <p className="px-3 py-4 text-sm text-muted-foreground">
+                        لا توجد تواريخ مطابقة للبحث الحالي
+                      </p>
+                    )}
+
+                    {groupedDates.map(({ monthKey, label, dates }) => {
+                      const filteredDates = dates.filter((date) =>
+                        dateSearch.trim() === ""
+                          ? true
+                          : date.includes(dateSearch.trim()) || label.includes(dateSearch.trim())
+                      );
+
+                      if (filteredDates.length === 0) return null;
+
+                      const isExpanded = expandedMonths.has(monthKey) || dateSearch.trim() !== "";
+
                       return (
-                        <CommandItem
-                          key={date}
-                          value={date}
-                          onSelect={() => toggleDate(date)}
-                          className="flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleDate(date)}
-                              aria-label={`اختر تاريخ ${date}`}
+                        <CommandGroup key={monthKey} className="px-2">
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-md px-2 py-2 text-right text-sm font-medium hover:bg-muted"
+                            onClick={() => toggleMonth(monthKey)}
+                          >
+                            <span>{label}</span>
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform ${
+                                isExpanded ? "rotate-180" : "rotate-0"
+                              }`}
                             />
-                            <span className="text-sm font-medium">{date}</span>
-                          </div>
-                          {isSelected && <Check className="h-4 w-4 text-primary" />}
-                        </CommandItem>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="space-y-1">
+                              {filteredDates.map((date) => {
+                                const isSelected = selectedDates.includes(date);
+                                return (
+                                  <CommandItem
+                                    key={date}
+                                    value={date}
+                                    onSelect={() => toggleDate(date)}
+                                    className="flex items-center justify-between rounded-md"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => toggleDate(date)}
+                                        aria-label={`اختر تاريخ ${date}`}
+                                      />
+                                      <span className="text-sm font-medium">{date}</span>
+                                    </div>
+                                    {isSelected && <Check className="h-4 w-4 text-primary" />}
+                                  </CommandItem>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </CommandGroup>
                       );
                     })}
-                  </CommandGroup>
+                  </div>
                 </Command>
               </PopoverContent>
             </Popover>
