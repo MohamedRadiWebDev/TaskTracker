@@ -38,6 +38,8 @@ export default function MissionManagement() {
   const [localStatement, setLocalStatement] = useState<string>("");
   const [localMissionDate, setLocalMissionDate] = useState<string>("");
   const [localExpenses, setLocalExpenses] = useState<ExpenseItem[]>([]);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
   // Use localStorage missions instead of API
@@ -224,17 +226,27 @@ export default function MissionManagement() {
   }, [updateActiveMission]);
 
   // Manual save function for all changes
-  const saveChanges = useCallback(() => {
+  const saveChanges = useCallback(async () => {
     if (!activeMission || !hasUnsavedChanges) return;
-    
+
     const updates: Partial<InsertMission> = {
       statement: localStatement,
       missionDate: localMissionDate,
       expenses: localExpenses
     };
-    
-    updateActiveMission(updates);
-    setHasUnsavedChanges(false);
+
+    setSaveStatus("saving");
+
+    try {
+      await updateActiveMission(updates);
+      setHasUnsavedChanges(false);
+      setSaveStatus("saved");
+      setLastSavedAt(new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }));
+    } catch (error) {
+      setSaveStatus("idle");
+      setHasUnsavedChanges(true);
+      console.error('Error saving mission changes:', error);
+    }
   }, [activeMission, hasUnsavedChanges, localStatement, localMissionDate, localExpenses, updateActiveMission]);
 
   // Auto-save changes after a short delay
@@ -248,7 +260,7 @@ export default function MissionManagement() {
     }
 
     autoSaveTimer.current = setTimeout(() => {
-      saveChanges();
+      void saveChanges();
     }, 1200);
 
     return () => {
@@ -257,6 +269,12 @@ export default function MissionManagement() {
       }
     };
   }, [activeMission, hasUnsavedChanges, saveChanges, updateLoading]);
+
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      setSaveStatus("idle");
+    }
+  }, [hasUnsavedChanges]);
 
   // Mission details change handlers (local only)
   const handleMissionDateChange = useCallback((date: string) => {
@@ -660,21 +678,43 @@ export default function MissionManagement() {
                     </div>
                     <div className="text-xs text-muted-foreground">سيتم الحفظ تلقائيًا خلال لحظات.</div>
                     <Button
-                      onClick={saveChanges}
+                      onClick={() => void saveChanges()}
                       variant="default"
                       className="w-full flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
-                      disabled={updateLoading}
+                      disabled={updateLoading || saveStatus === "saving"}
                     >
                       <Save className="w-4 h-4" />
-                      {updateLoading ? 'جاري الحفظ...' : 'حفظ جميع التغييرات'}
+                      {updateLoading || saveStatus === "saving" ? 'جاري الحفظ...' : 'حفظ جميع التغييرات'}
                     </Button>
                   </div>
                 ) : (
-                  <div className="text-sm text-green-600 bg-green-50 p-3 rounded-lg border border-green-200 flex items-center gap-2">
-                    <Save className="w-4 h-4" />
-                    جميع التغييرات محفوظة
+                  <div className="text-sm text-green-600 bg-green-50 p-3 rounded-lg border border-green-200 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Save className="w-4 h-4" />
+                      جميع التغييرات محفوظة
+                    </div>
+                    {lastSavedAt && (
+                      <div className="text-xs text-green-700">
+                        آخر حفظ: {lastSavedAt}
+                      </div>
+                    )}
                   </div>
                 )}
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {saveStatus === "saving" && (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      جاري حفظ التغييرات...
+                    </>
+                  )}
+                  {saveStatus === "saved" && lastSavedAt && (
+                    <>
+                      <Save className="w-3 h-3" />
+                      تم الحفظ تلقائيًا في {lastSavedAt}
+                    </>
+                  )}
+                </div>
 
                 <div className="flex gap-2 text-xs">
                   <span className="px-2 py-1 bg-primary/10 text-primary rounded">
