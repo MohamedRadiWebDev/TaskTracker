@@ -608,7 +608,11 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           
           // Calculate total from expenses
           const calculatedTotal = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-          const sheetTotal = parseNumber((row as any)['الاجمالى']);
+          const sheetTotal =
+            parseNumber((row as any)['الاجمالى']) ||
+            parseNumber((row as any)['الاجمالى النهائى']) ||
+            parseNumber((row as any)['الاجمالى النهائي']);
+          const missionTotal = sheetTotal || calculatedTotal;
           
           const mission: Mission = {
             id: newId,
@@ -618,12 +622,12 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
             missionDate,
             bank: uniqueBanks.size === 1 ? Array.from(uniqueBanks)[0] : null,
             statement: statement || null,
-            totalAmount: calculatedTotal.toString(),
+            totalAmount: missionTotal.toString(),
             expenses,
             createdAt: new Date()
           };
-          
-          if (Math.abs(calculatedTotal - sheetTotal) > 0.01) {
+
+          if (sheetTotal > 0 && Math.abs(calculatedTotal - sheetTotal) > 0.01) {
             console.warn(`Total mismatch for ${employeeName}: calculated=${calculatedTotal}, sheet=${sheetTotal}`);
           }
           
