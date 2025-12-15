@@ -103,6 +103,56 @@ function parseNumber(val: any): number {
   return 0;
 }
 
+// Normalize Arabic key names to compare variations consistently
+function normalizeArabicKey(key: string): string {
+  return key
+    .replace(/\s+/g, '') // remove whitespace
+    .replace(/[إأآا]/g, 'ا')
+    .replace(/[ىي]/g, 'ي')
+    .toLowerCase();
+}
+
+// Extract an explicit sheet total from common "الاجمالى" column variants
+function extractSheetTotal(row: any): number | null {
+  if (!row) return null;
+
+  const preferredKeys = new Set([
+    'الاجمالى',
+    'الاجمالي',
+    'الاجماليالنهائي',
+    'الاجماليالنهائى',
+    'الاجماليالنهائياوالمستحق',
+    'الاجمالىالنهائي',
+    'الاجمالىالنهائى',
+    'الاجمالىالنهائياوالمستحق'
+  ]);
+
+  let matchedValue: number | null = null;
+
+  Object.keys(row).forEach(key => {
+    const normalizedKey = normalizeArabicKey(key);
+
+    // Match exact preferred keys first
+    if (preferredKeys.has(normalizedKey)) {
+      const value = parseNumber((row as any)[key]);
+      if (!isNaN(value)) {
+        matchedValue = value;
+      }
+      return;
+    }
+
+    // Fallback: any key that starts with الاجمالي / الاجمالى
+    if (normalizedKey.startsWith('الاجمالي') || normalizedKey.startsWith('الاجمالى')) {
+      const value = parseNumber((row as any)[key]);
+      if (!isNaN(value)) {
+        matchedValue = value;
+      }
+    }
+  });
+
+  return matchedValue;
+}
+
 // Expense type label mapping for detailed export
 const detailedExportTypeMapping: Record<string, string> = {
   'انتقالات': 'transportation',
@@ -608,11 +658,8 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           
           // Calculate total from expenses
           const calculatedTotal = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-          const sheetTotal =
-            parseNumber((row as any)['الاجمالى']) ||
-            parseNumber((row as any)['الاجمالى النهائى']) ||
-            parseNumber((row as any)['الاجمالى النهائي']);
-          const missionTotal = sheetTotal || calculatedTotal;
+          const sheetTotal = extractSheetTotal(row);
+          const missionTotal = sheetTotal ?? calculatedTotal;
           
           const mission: Mission = {
             id: newId,
@@ -627,7 +674,7 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
             createdAt: new Date()
           };
 
-          if (sheetTotal > 0 && Math.abs(calculatedTotal - sheetTotal) > 0.01) {
+          if (sheetTotal !== null && expenses.length > 0 && Math.abs(calculatedTotal - sheetTotal) > 0.01) {
             console.warn(`Total mismatch for ${employeeName}: calculated=${calculatedTotal}, sheet=${sheetTotal}`);
           }
           
