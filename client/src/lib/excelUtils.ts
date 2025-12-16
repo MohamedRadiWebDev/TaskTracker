@@ -45,6 +45,8 @@ function normalizeExpenseType(type: string): string {
 
 // Helper to detect dynamic bank slot indices (supports multiple header formats)
 function getBankSlotIndices(row: any): number[] {
+  if (!row) return [];
+
   const indices = new Set<number>();
   const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
   const slotMatchers = [
@@ -55,7 +57,9 @@ function getBankSlotIndices(row: any): number[] {
     /الاجمالي\s*(\d+)/
   ];
 
-  Object.keys(row || {}).forEach(key => {
+  for (const key of Object.keys(row)) {
+    let matched = false;
+
     for (const matcher of slotMatchers) {
       const match = key.match(matcher);
       if (match) {
@@ -63,9 +67,12 @@ function getBankSlotIndices(row: any): number[] {
         if (!isNaN(index)) {
           indices.add(index);
         }
-        return;
+        matched = true;
+        break;
       }
     }
+
+    if (matched) continue;
 
     // Fallback: extract slot numbers from expense columns like "انتقالات5"
     for (const type of typeColumns) {
@@ -76,6 +83,27 @@ function getBankSlotIndices(row: any): number[] {
           indices.add(index);
         }
         break;
+      }
+    }
+  }
+
+  return Array.from(indices).sort((a, b) => a - b);
+}
+
+// Resolve bank name across supported header formats for a given slot
+function getBankNameForSlot(row: any, slot: number): string {
+  const candidates = [
+    `بنك / شركة ( بنك${slot})`,
+    `بنك / شركة (بنك${slot})`,
+    `جهة ${slot}`,
+    `جهة${slot}`
+  ];
+
+  for (const key of candidates) {
+    if (row && row[key] !== undefined && row[key] !== null) {
+      const value = String(row[key]).trim();
+      if (value) {
+        return value;
       }
     }
   });
@@ -102,6 +130,16 @@ function getBankNameForSlot(row: any, slot: number): string {
   };
 
   return Array.from(indices).sort((a, b) => a - b);
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  return '';
 }
 
 // Detection helper for detailed export format
