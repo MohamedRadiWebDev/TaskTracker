@@ -99,6 +99,46 @@ function getBankNameForSlot(row: any, slot: number): string {
         return value;
       }
     }
+  });
+
+  return Array.from(indices).sort((a, b) => a - b);
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
   }
 
   return '';
