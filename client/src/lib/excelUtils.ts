@@ -131,6 +131,17 @@ function isDetailedExportRowFormat(row: any): boolean {
     return true;
   }
 
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRowFormat(row: any): boolean {
+  const safeRow = row || {};
+  const bankSlotIndices = getBankSlotIndices(safeRow);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
   // Check for expense type columns with numeric suffixes
   return Object.keys(safeRow).some(key =>
     expensePrefixColumns.some(type => key.startsWith(type) && /\d+$/.test(key))
