@@ -43,12 +43,14 @@ function normalizeExpenseType(type: string): string {
   return expenseTypeMapping[type] || type;
 }
 
+// Shared expense prefixes used when parsing dynamic bank columns
+const expensePrefixColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
+
 // Helper to detect dynamic bank slot indices (supports multiple header formats)
 function getBankSlotIndices(row: any): number[] {
   if (!row) return [];
 
   const indices = new Set<number>();
-  const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
   const slotMatchers = [
     /بنك \/ شركة \(\s*بنك\s*(\d+)\s*\)/,
     /جهة\s*(\d+)/,
@@ -75,7 +77,7 @@ function getBankSlotIndices(row: any): number[] {
     if (matched) continue;
 
     // Fallback: extract slot numbers from expense columns like "انتقالات5"
-    for (const type of typeColumns) {
+    for (const type of expensePrefixColumns) {
       const typeMatch = key.match(new RegExp(`${type}(\\d+)`));
       if (typeMatch) {
         const index = parseInt(typeMatch[1], 10);
@@ -178,10 +180,19 @@ function isDetailedExportRowFormat(row: any): boolean {
     return true;
   }
 
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRowFormat(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
   // Check for expense type columns with numeric suffixes
-  const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
   const hasTypedColumns = Object.keys(row || {}).some(key => {
-    return typeColumns.some(type => key.startsWith(type) && /\d+$/.test(key));
+    return expensePrefixColumns.some(type => key.startsWith(type) && /\d+$/.test(key));
   });
 
   return hasTypedColumns;
