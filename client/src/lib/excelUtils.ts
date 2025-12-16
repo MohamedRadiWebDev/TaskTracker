@@ -124,78 +124,17 @@ function isDetailedExportRow(row: any): boolean {
 }
 
 // Detection helper for detailed export format
-function isDetailedExportRow(row: any): boolean {
-  const bankSlotIndices = getBankSlotIndices(row);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  return '';
-}
-
-// Detection helper for detailed export format
-function isDetailedExportRow(row: any): boolean {
-  const bankSlotIndices = getBankSlotIndices(row);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  return '';
-}
-
-// Detection helper for detailed export format
-function isDetailedExportRow(row: any): boolean {
-  const bankSlotIndices = getBankSlotIndices(row);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  return '';
-}
-
-// Detection helper for detailed export format
-function isDetailedExportRow(row: any): boolean {
-  const bankSlotIndices = getBankSlotIndices(row);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  return '';
-}
-
-// Detection helper for detailed export format
-function isDetailedExportRow(row: any): boolean {
-  const bankSlotIndices = getBankSlotIndices(row);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  return '';
-}
-
-// Detection helper for detailed export format
 function isDetailedExportRowFormat(row: any): boolean {
-  const bankSlotIndices = getBankSlotIndices(row);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  return '';
-}
-
-// Detection helper for detailed export format
-function isDetailedExportRowFormat(row: any): boolean {
-  const bankSlotIndices = getBankSlotIndices(row);
+  const safeRow = row || {};
+  const bankSlotIndices = getBankSlotIndices(safeRow);
   if (bankSlotIndices.length > 0) {
     return true;
   }
 
   // Check for expense type columns with numeric suffixes
-  const hasTypedColumns = Object.keys(row || {}).some(key => {
-    return expensePrefixColumns.some(type => key.startsWith(type) && /\d+$/.test(key));
-  });
-
-  return hasTypedColumns;
+  return Object.keys(safeRow).some(key =>
+    expensePrefixColumns.some(type => key.startsWith(type) && /\d+$/.test(key))
+  );
 }
 
 // Helper to parse numbers from Excel cells
