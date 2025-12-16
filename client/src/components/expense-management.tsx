@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -83,6 +84,7 @@ export default function ExpenseManagement({
   onUpdateExpense,
   onRemoveExpense
 }: ExpenseManagementProps) {
+  const [, setLocation] = useLocation();
   const { banks } = useBanks();
 
   // Keep banks selected in the first expense at the top of the list
@@ -125,14 +127,24 @@ export default function ExpenseManagement({
           <Banknote className="w-6 h-6 text-primary ml-3" />
           إدارة المصروفات
         </h2>
-        <Button 
-          onClick={() => onAddExpense('transportation')}
-          className="flex items-center"
-          data-testid="button-add-expense"
-        >
-          <Plus className="w-4 h-4 ml-2" />
-          إضافة بند
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setLocation("/receipt-distribution")}
+            variant="outline"
+            className="flex items-center"
+          >
+            <Receipt className="w-4 h-4 ml-2" />
+            توزيع الإيصالات
+          </Button>
+          <Button
+            onClick={() => onAddExpense('transportation')}
+            className="flex items-center"
+            data-testid="button-add-expense"
+          >
+            <Plus className="w-4 h-4 ml-2" />
+            إضافة بند
+          </Button>
+        </div>
       </div>
 
       {/* Expense Type Buttons */}
