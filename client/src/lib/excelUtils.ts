@@ -91,28 +91,7 @@ function getBankSlotIndices(row: any): number[] {
 }
 
 // Resolve bank name across supported header formats for a given slot
-function getBankNameForSlot(row: any, slot: number): string {
-  const candidates = [
-    `بنك / شركة ( بنك${slot})`,
-    `بنك / شركة (بنك${slot})`,
-    `جهة ${slot}`,
-    `جهة${slot}`
-  ];
-
-  for (const key of candidates) {
-    if (row && row[key] !== undefined && row[key] !== null) {
-      const value = String(row[key]).trim();
-      if (value) {
-        return value;
-      }
-    }
-  };
-
-  return Array.from(indices).sort((a, b) => a - b);
-}
-
-// Resolve bank name across supported header formats for a given slot
-function getBankNameForSlot(row: any, slot: number): string {
+function resolveBankNameForSlot(row: any, slot: number): string {
   const candidates = [
     `بنك / شركة ( بنك${slot})`,
     `بنك / شركة (بنك${slot})`,
@@ -184,6 +163,16 @@ function isDetailedExportRow(row: any): boolean {
 
 // Detection helper for detailed export format
 function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRowFormat(row: any): boolean {
   const bankSlotIndices = getBankSlotIndices(row);
   if (bankSlotIndices.length > 0) {
     return true;
@@ -705,7 +694,7 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
         const newId = generateMissionId();
         
         // Check if this is a detailed export format
-        if (isDetailedExportRow(row)) {
+        if (isDetailedExportRowFormat(row)) {
           // Parse detailed export format with numbered bank columns
           console.log('Detected detailed export format row');
           
@@ -728,7 +717,7 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
 
           // Process all detected bank missions and collect by type with bank allocations
           for (const slot of slotsToProcess) {
-            const rawBankName = getBankNameForSlot(row, slot);
+            const rawBankName = resolveBankNameForSlot(row, slot);
             const bankName = rawBankName && rawBankName !== 'لا يوجد بنك' ? rawBankName : `بنك ${slot}`;
             let slotHasExpense = false;
 
