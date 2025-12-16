@@ -11,42 +11,35 @@ export interface ExcelImportResult {
 // Function to sanitize values to prevent formula injection
 function sanitizeForExcel(value: any): any {
   if (typeof value === 'string') {
-    // Prevent formula injection by escaping values that start with =, +, -, @
     if (value.match(/^[=+\-@]/)) {
-      return `'${value}`; // Prefix with single quote to treat as text
+      return `'${value}`;
     }
   }
   return value;
 }
 
-// Expense type mapping for normalization
 const expenseTypeMapping: Record<string, string> = {
-  // English to normalized
-  'transportation': 'transportation',
-  'transport': 'transportation', 
-  'fees': 'fees',
-  'tips': 'tips',
-  'tip': 'tips',
+  transportation: 'transportation',
+  transport: 'transportation',
+  fees: 'fees',
+  tips: 'tips',
+  tip: 'tips',
   'office-supplies': 'office-supplies',
-  'hospitality': 'hospitality',
-  // Arabic to normalized
-  'انتقالات': 'transportation',
-  'رسوم': 'fees',
-  'اكراميات': 'tips',
-  'إكراميات': 'tips',
+  hospitality: 'hospitality',
+  انتقالات: 'transportation',
+  رسوم: 'fees',
+  اكراميات: 'tips',
+  إكراميات: 'tips',
   'أدوات مكتبية': 'office-supplies',
-  'ضيافة': 'hospitality'
+  ضيافة: 'hospitality'
 };
 
-// Function to normalize expense type
 function normalizeExpenseType(type: string): string {
   return expenseTypeMapping[type] || type;
 }
 
-// Shared expense prefixes used when parsing dynamic bank columns
 const expensePrefixColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
 
-// Helper to detect dynamic bank slot indices (supports multiple header formats)
 function getBankSlotIndices(row: any): number[] {
   if (!row) return [];
 
@@ -76,7 +69,6 @@ function getBankSlotIndices(row: any): number[] {
 
     if (matched) continue;
 
-    // Fallback: extract slot numbers from expense columns like "انتقالات5"
     for (const type of expensePrefixColumns) {
       const typeMatch = key.match(new RegExp(`${type}(\\d+)`));
       if (typeMatch) {
@@ -92,7 +84,6 @@ function getBankSlotIndices(row: any): number[] {
   return Array.from(indices).sort((a, b) => a - b);
 }
 
-// Resolve bank name across supported header formats for a given slot
 function resolveBankNameForSlot(row: any, slot: number): string {
   const candidates = [
     `بنك / شركة ( بنك${slot})`,
@@ -108,77 +99,40 @@ function resolveBankNameForSlot(row: any, slot: number): string {
         return value;
       }
     }
-  };
-
-  return Array.from(indices).sort((a, b) => a - b);
-}
-
-// Detection helper for detailed export format
-function isDetailedExportRow(row: any): boolean {
-  const bankSlotIndices = getBankSlotIndices(row);
-  if (bankSlotIndices.length > 0) {
-    return true;
   }
 
   return '';
 }
 
-// Detection helper for detailed export format
-function isDetailedExportRowFormat(row: any): boolean {
-  const safeRow = row || {};
-  const bankSlotIndices = getBankSlotIndices(safeRow);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  return '';
-}
+/* ===========================
+   ✅ SINGLE IMPLEMENTATION
+   =========================== */
 
 // Detection helper for detailed export format (single implementation)
 function isDetailedExportRowFormat(row: any): boolean {
   const safeRow = row || {};
   const bankSlotIndices = getBankSlotIndices(safeRow);
+
   if (bankSlotIndices.length > 0) {
     return true;
   }
 
-  return '';
-}
-
-// Detection helper for detailed export format (single implementation)
-function isDetailedExportRowFormat(row: any): boolean {
-  const safeRow = row || {};
-  const bankSlotIndices = getBankSlotIndices(safeRow);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  return '';
-}
-
-// Detection helper for detailed export format (single implementation)
-function isDetailedExportRowFormat(row: any): boolean {
-  const safeRow = row || {};
-  const bankSlotIndices = getBankSlotIndices(safeRow);
-  if (bankSlotIndices.length > 0) {
-    return true;
-  }
-
-  // Check for expense type columns with numeric suffixes
   return Object.keys(safeRow).some((key) =>
-    expensePrefixColumns.some((type) => key.startsWith(type) && /\d+$/.test(key))
+    expensePrefixColumns.some(
+      (type) => key.startsWith(type) && /\d+$/.test(key)
+    )
   );
 }
 
-// Alias retained for backwards compatibility where both names are used
+// Alias retained for backwards compatibility
 const isDetailedExportRow = isDetailedExportRowFormat;
 
-// Helper to parse numbers from Excel cells
+/* =========================== */
+
 function parseNumber(val: any): number {
   if (val === null || val === undefined || val === '') return 0;
   if (typeof val === 'number') return val;
   if (typeof val === 'string') {
-    // Remove commas and parse
     const cleaned = val.replace(/[,،]/g, '');
     const parsed = parseFloat(cleaned);
     return isNaN(parsed) ? 0 : parsed;
