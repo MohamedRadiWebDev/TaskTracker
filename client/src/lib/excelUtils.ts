@@ -43,24 +43,88 @@ function normalizeExpenseType(type: string): string {
   return expenseTypeMapping[type] || type;
 }
 
-// Detection helper for detailed export format
-function isDetailedExportRow(row: any): boolean {
-  // Check for bank slot columns like "بنك / شركة ( بنك1)"
-  for (let i = 1; i <= 4; i++) {
-    if (row[`بنك / شركة ( بنك${i})`]) {
-      return true;
-    }
-  }
-  // Check for expense type columns with numbers
+// Helper to detect dynamic bank slot indices (supports multiple header formats)
+function getBankSlotIndices(row: any): number[] {
+  if (!row) return [];
+
+  const indices = new Set<number>();
   const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
-  for (const type of typeColumns) {
-    for (let i = 1; i <= 4; i++) {
-      if (row[`${type}${i}`] !== undefined) {
-        return true;
+  const slotMatchers = [
+    /بنك \/ شركة \(\s*بنك\s*(\d+)\s*\)/,
+    /جهة\s*(\d+)/,
+    /مج\s*(\d+)/,
+    /الاجمالى\s*(\d+)/,
+    /الاجمالي\s*(\d+)/
+  ];
+
+  for (const key of Object.keys(row)) {
+    let matched = false;
+
+    for (const matcher of slotMatchers) {
+      const match = key.match(matcher);
+      if (match) {
+        const index = parseInt(match[1], 10);
+        if (!isNaN(index)) {
+          indices.add(index);
+        }
+        matched = true;
+        break;
+      }
+    }
+
+    if (matched) continue;
+
+    // Fallback: extract slot numbers from expense columns like "انتقالات5"
+    for (const type of typeColumns) {
+      const typeMatch = key.match(new RegExp(`${type}(\\d+)`));
+      if (typeMatch) {
+        const index = parseInt(typeMatch[1], 10);
+        if (!isNaN(index)) {
+          indices.add(index);
+        }
+        break;
       }
     }
   }
-  return false;
+
+  return Array.from(indices).sort((a, b) => a - b);
+}
+
+// Resolve bank name across supported header formats for a given slot
+function resolveBankNameForSlot(row: any, slot: number): string {
+  const candidates = [
+    `بنك / شركة ( بنك${slot})`,
+    `بنك / شركة (بنك${slot})`,
+    `جهة ${slot}`,
+    `جهة${slot}`
+  ];
+
+  for (const key of candidates) {
+    if (row && row[key] !== undefined && row[key] !== null) {
+      const value = String(row[key]).trim();
+      if (value) {
+        return value;
+      }
+    }
+  }
+
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRowFormat(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  // Check for expense type columns with numeric suffixes
+  const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
+  const hasTypedColumns = Object.keys(row || {}).some(key => {
+    return typeColumns.some(type => key.startsWith(type) && /\d+$/.test(key));
+  });
+
+  return hasTypedColumns;
 }
 
 // Helper to parse numbers from Excel cells
@@ -74,6 +138,56 @@ function parseNumber(val: any): number {
     return isNaN(parsed) ? 0 : parsed;
   }
   return 0;
+}
+
+// Normalize Arabic key names to compare variations consistently
+function normalizeArabicKey(key: string): string {
+  return key
+    .replace(/\s+/g, '') // remove whitespace
+    .replace(/[إأآا]/g, 'ا')
+    .replace(/[ىي]/g, 'ي')
+    .toLowerCase();
+}
+
+// Extract an explicit sheet total from common "الاجمالى" column variants
+function extractSheetTotal(row: any): number | null {
+  if (!row) return null;
+
+  const preferredKeys = new Set([
+    'الاجمالى',
+    'الاجمالي',
+    'الاجماليالنهائي',
+    'الاجماليالنهائى',
+    'الاجماليالنهائياوالمستحق',
+    'الاجمالىالنهائي',
+    'الاجمالىالنهائى',
+    'الاجمالىالنهائياوالمستحق'
+  ]);
+
+  let matchedValue: number | null = null;
+
+  Object.keys(row).forEach(key => {
+    const normalizedKey = normalizeArabicKey(key);
+
+    // Match exact preferred keys first
+    if (preferredKeys.has(normalizedKey)) {
+      const value = parseNumber((row as any)[key]);
+      if (!isNaN(value)) {
+        matchedValue = value;
+      }
+      return;
+    }
+
+    // Fallback: any key that starts with الاجمالي / الاجمالى
+    if (normalizedKey.startsWith('الاجمالي') || normalizedKey.startsWith('الاجمالى')) {
+      const value = parseNumber((row as any)[key]);
+      if (!isNaN(value)) {
+        matchedValue = value;
+      }
+    }
+  });
+
+  return matchedValue;
 }
 
 // Expense type label mapping for detailed export
@@ -255,10 +369,12 @@ export function exportMissionsToExcel(missions: Mission[]): void {
   try {
     // Create workbook
     const workbook = XLSX.utils.book_new();
-    
+
     // Process each mission individually - one row per mission
     const exportRows: any[] = [];
-    
+    const processedMissions: { base: any; bankMissions: any[] }[] = [];
+    let maxBankSlots = 0;
+
     missions.forEach(mission => {
       // Get all unique banks from mission expenses
       const allBanks = new Set<string>();
@@ -356,6 +472,7 @@ export function exportMissionsToExcel(missions: Mission[]): void {
 
       // Sort bank missions by bank name for consistent ordering
       const sortedBankMissions = bankMissions.sort((a, b) => a.bankName.localeCompare(b.bankName));
+      maxBankSlots = Math.max(maxBankSlots, sortedBankMissions.length);
 
       // Create row with basic employee info
       const row: any = {
@@ -369,12 +486,19 @@ export function exportMissionsToExcel(missions: Mission[]): void {
 
       // Calculate grand total from ALL bank missions
       let grandTotal = sortedBankMissions.reduce((sum, bankMission) => sum + bankMission.total, 0);
-      
-      // Add up to 4 bank missions to display columns - distribute banks across the sheet
-      for (let i = 0; i < 4; i++) {
-        const bankMission = sortedBankMissions[i];
+
+      processedMissions.push({ base: { ...row, 'الاجمالى': grandTotal }, bankMissions: sortedBankMissions });
+    });
+
+    const totalBankSlots = Math.max(1, maxBankSlots);
+
+    processedMissions.forEach(({ base, bankMissions }) => {
+      const row = { ...base } as any;
+
+      for (let i = 0; i < totalBankSlots; i++) {
+        const bankMission = bankMissions[i];
         const missionNum = i + 1;
-        
+
         if (bankMission) {
           row[`بنك / شركة ( بنك${missionNum})`] = sanitizeForExcel(bankMission.bankName);
           row[`انتقالات${missionNum}`] = bankMission.transportation;
@@ -384,7 +508,6 @@ export function exportMissionsToExcel(missions: Mission[]): void {
           row[`ضيافة${missionNum}`] = bankMission.hospitality;
           row[`الاجمالى${missionNum}`] = bankMission.total;
         } else {
-          // Empty bank slot
           row[`بنك / شركة ( بنك${missionNum})`] = 'لا يوجد بنك';
           row[`انتقالات${missionNum}`] = 0;
           row[`رسوم${missionNum}`] = 0;
@@ -394,10 +517,7 @@ export function exportMissionsToExcel(missions: Mission[]): void {
           row[`الاجمالى${missionNum}`] = 0;
         }
       }
-      
-      // Add grand total (full precision)
-      row['الاجمالى'] = grandTotal;
-      
+
       exportRows.push(row);
     });
 
@@ -405,9 +525,9 @@ export function exportMissionsToExcel(missions: Mission[]): void {
     const headers = [
       'اسم الموظف', 'الكود', 'فرع', 'التاريخ', 'اليوم', 'بيـــــــــــــــــــــــان'
     ];
-    
-    // Add headers for 4 banks
-    for (let i = 1; i <= 4; i++) {
+
+    // Add headers for all detected bank slots
+    for (let i = 1; i <= totalBankSlots; i++) {
       headers.push(
         `بنك / شركة ( بنك${i})`,
         `انتقالات${i}`,
@@ -433,8 +553,8 @@ export function exportMissionsToExcel(missions: Mission[]): void {
       { wch: 25 }, // بيان
     ];
     
-    // Add widths for mission columns (4 missions × 7 columns each)
-    for (let i = 0; i < 4; i++) {
+    // Add widths for mission columns (bank slots × 7 columns each)
+    for (let i = 0; i < totalBankSlots; i++) {
       columnWidths.push(
         { wch: 20 }, // بنك / شركة
         { wch: 10 }, // انتقالات
@@ -514,7 +634,7 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
         const newId = generateMissionId();
         
         // Check if this is a detailed export format
-        if (isDetailedExportRow(row)) {
+        if (isDetailedExportRowFormat(row)) {
           // Parse detailed export format with numbered bank columns
           console.log('Detected detailed export format row');
           
@@ -532,33 +652,38 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           
           const expensesByType: Record<string, { amount: number; banks: string[]; bankAllocations: Record<string, number> }> = {};
           const uniqueBanks = new Set<string>();
-          
-          // Process up to 4 bank missions and collect by type with bank allocations
-          for (let i = 1; i <= 4; i++) {
-            const bankName = String((row as any)[`بنك / شركة ( بنك${i})`] || '').trim();
-            
-            // Skip if bank name is empty or placeholder
-            if (!bankName || bankName === 'لا يوجد بنك' || bankName === '') continue;
-            
-            uniqueBanks.add(bankName);
-            
+          const bankSlotIndices = getBankSlotIndices(row);
+          const slotsToProcess = bankSlotIndices.length > 0 ? bankSlotIndices : [1];
+
+          // Process all detected bank missions and collect by type with bank allocations
+          for (const slot of slotsToProcess) {
+            const rawBankName = resolveBankNameForSlot(row, slot);
+            const bankName = rawBankName && rawBankName !== 'لا يوجد بنك' ? rawBankName : `بنك ${slot}`;
+            let slotHasExpense = false;
+
             // Process each expense type for this bank
             for (const [label, type] of Object.entries(detailedExportTypeMapping)) {
-              const amount = parseNumber((row as any)[`${label}${i}`]);
-              
+              const amount = parseNumber((row as any)[`${label}${slot}`]);
+
               if (amount > 0) {
+                slotHasExpense = true;
+
                 if (!expensesByType[type]) {
                   expensesByType[type] = { amount: 0, banks: [], bankAllocations: {} };
                 }
                 expensesByType[type].amount += amount;
                 expensesByType[type].banks.push(bankName);
-                
+
                 // Build bank allocations inline
                 if (!expensesByType[type].bankAllocations[bankName]) {
                   expensesByType[type].bankAllocations[bankName] = 0;
                 }
                 expensesByType[type].bankAllocations[bankName] += amount;
               }
+            }
+
+            if (slotHasExpense) {
+              uniqueBanks.add(bankName);
             }
           }
           
@@ -573,7 +698,8 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
           
           // Calculate total from expenses
           const calculatedTotal = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-          const sheetTotal = parseNumber((row as any)['الاجمالى']);
+          const sheetTotal = extractSheetTotal(row);
+          const missionTotal = sheetTotal ?? calculatedTotal;
           
           const mission: Mission = {
             id: newId,
@@ -583,12 +709,12 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
             missionDate,
             bank: uniqueBanks.size === 1 ? Array.from(uniqueBanks)[0] : null,
             statement: statement || null,
-            totalAmount: calculatedTotal.toString(),
+            totalAmount: missionTotal.toString(),
             expenses,
             createdAt: new Date()
           };
-          
-          if (Math.abs(calculatedTotal - sheetTotal) > 0.01) {
+
+          if (sheetTotal !== null && expenses.length > 0 && Math.abs(calculatedTotal - sheetTotal) > 0.01) {
             console.warn(`Total mismatch for ${employeeName}: calculated=${calculatedTotal}, sheet=${sheetTotal}`);
           }
           
