@@ -99,7 +99,7 @@ function getBankNameForSlot(row: any, slot: number): string {
         return value;
       }
     }
-  });
+  };
 
   return Array.from(indices).sort((a, b) => a - b);
 }
