@@ -135,7 +135,7 @@ function isDetailedExportRowFormat(row: any): boolean {
 }
 
 // Detection helper for detailed export format
-function isDetailedExportRowFormat(row: any): boolean {
+const isDetailedExportRowFormat = (row: any): boolean => {
   const safeRow = row || {};
   const bankSlotIndices = getBankSlotIndices(safeRow);
   if (bankSlotIndices.length > 0) {
@@ -146,7 +146,7 @@ function isDetailedExportRowFormat(row: any): boolean {
   return Object.keys(safeRow).some(key =>
     expensePrefixColumns.some(type => key.startsWith(type) && /\d+$/.test(key))
   );
-}
+};
 
 // Helper to parse numbers from Excel cells
 function parseNumber(val: any): number {
