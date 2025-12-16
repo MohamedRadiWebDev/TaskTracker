@@ -43,17 +43,60 @@ function normalizeExpenseType(type: string): string {
   return expenseTypeMapping[type] || type;
 }
 
-// Helper to detect dynamic bank slot indices (e.g., بنك / شركة ( بنك5))
+// Helper to detect dynamic bank slot indices (supports multiple header formats)
 function getBankSlotIndices(row: any): number[] {
   const indices = new Set<number>();
   const typeColumns = ['انتقالات', 'رسوم', 'اكراميات', 'إكراميات', 'أدوات مكتبية', 'ضيافة'];
+  const slotMatchers = [
+    /بنك \/ شركة \(\s*بنك\s*(\d+)\s*\)/,
+    /جهة\s*(\d+)/,
+    /مج\s*(\d+)/,
+    /الاجمالى\s*(\d+)/,
+    /الاجمالي\s*(\d+)/
+  ];
 
   Object.keys(row || {}).forEach(key => {
-    const bankMatch = key.match(/بنك \/ شركة \( بنك(\d+)\)/);
-    if (bankMatch) {
-      const index = parseInt(bankMatch[1], 10);
-      if (!isNaN(index)) {
-        indices.add(index);
+    for (const matcher of slotMatchers) {
+      const match = key.match(matcher);
+      if (match) {
+        const index = parseInt(match[1], 10);
+        if (!isNaN(index)) {
+          indices.add(index);
+        }
+        return;
+      }
+    }
+
+    // Fallback: extract slot numbers from expense columns like "انتقالات5"
+    for (const type of typeColumns) {
+      const typeMatch = key.match(new RegExp(`${type}(\\d+)`));
+      if (typeMatch) {
+        const index = parseInt(typeMatch[1], 10);
+        if (!isNaN(index)) {
+          indices.add(index);
+        }
+        break;
+      }
+    }
+  });
+
+  return Array.from(indices).sort((a, b) => a - b);
+}
+
+// Resolve bank name across supported header formats for a given slot
+function getBankNameForSlot(row: any, slot: number): string {
+  const candidates = [
+    `بنك / شركة ( بنك${slot})`,
+    `بنك / شركة (بنك${slot})`,
+    `جهة ${slot}`,
+    `جهة${slot}`
+  ];
+
+  for (const key of candidates) {
+    if (row && row[key] !== undefined && row[key] !== null) {
+      const value = String(row[key]).trim();
+      if (value) {
+        return value;
       }
       return;
     }
@@ -72,6 +115,16 @@ function getBankSlotIndices(row: any): number[] {
   });
 
   return Array.from(indices).sort((a, b) => a - b);
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  return '';
 }
 
 // Detection helper for detailed export format
@@ -620,18 +673,17 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
 
           // Process all detected bank missions and collect by type with bank allocations
           for (const slot of slotsToProcess) {
-            const bankName = String((row as any)[`بنك / شركة ( بنك${slot})`] || '').trim();
-
-            // Skip if bank name is empty or placeholder
-            if (!bankName || bankName === 'لا يوجد بنك' || bankName === '') continue;
-
-            uniqueBanks.add(bankName);
+            const rawBankName = getBankNameForSlot(row, slot);
+            const bankName = rawBankName && rawBankName !== 'لا يوجد بنك' ? rawBankName : `بنك ${slot}`;
+            let slotHasExpense = false;
 
             // Process each expense type for this bank
             for (const [label, type] of Object.entries(detailedExportTypeMapping)) {
               const amount = parseNumber((row as any)[`${label}${slot}`]);
 
               if (amount > 0) {
+                slotHasExpense = true;
+
                 if (!expensesByType[type]) {
                   expensesByType[type] = { amount: 0, banks: [], bankAllocations: {} };
                 }
@@ -644,6 +696,10 @@ export async function importMissionsFromExcel(file: File): Promise<ExcelImportRe
                 }
                 expensesByType[type].bankAllocations[bankName] += amount;
               }
+            }
+
+            if (slotHasExpense) {
+              uniqueBanks.add(bankName);
             }
           }
           
