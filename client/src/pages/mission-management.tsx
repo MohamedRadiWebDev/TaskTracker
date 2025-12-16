@@ -28,7 +28,7 @@ interface Totals {
   bankCount: number;
   bankTotals: Record<string, number>;
 }
-import { Briefcase, Save, Trash2, Plus, Edit2, Download, Upload, Loader2, FileText, AlertTriangle, Undo2 } from "lucide-react";
+import { Briefcase, Save, Trash2, Plus, Edit2, Download, Upload, Loader2, FileText, AlertTriangle, Undo2, Search } from "lucide-react";
 
 export default function MissionManagement() {
   const { toast } = useToast();
@@ -470,6 +470,15 @@ export default function MissionManagement() {
           >
             <FileText className="w-4 h-4 ml-2" />
             تقرير الفترة
+          </Button>
+
+          <Button
+            onClick={() => setLocation("/search")}
+            variant="outline"
+            className="bg-cyan-50 hover:bg-cyan-100 border-cyan-200 text-cyan-700"
+          >
+            <Search className="w-4 h-4 ml-2" />
+            البحث عن المهام
           </Button>
 
           <Button
