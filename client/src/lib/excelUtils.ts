@@ -146,7 +146,7 @@ function isDetailedExportRowFormat(row: any): boolean {
 }
 
 // Detection helper for detailed export format (single implementation)
-const isDetailedExportRowFormat = (row: any): boolean => {
+function isDetailedExportRowFormat(row: any): boolean {
   const safeRow = row || {};
   const bankSlotIndices = getBankSlotIndices(safeRow);
   if (bankSlotIndices.length > 0) {
@@ -154,10 +154,13 @@ const isDetailedExportRowFormat = (row: any): boolean => {
   }
 
   // Check for expense type columns with numeric suffixes
-  return Object.keys(safeRow).some(key =>
-    expensePrefixColumns.some(type => key.startsWith(type) && /\d+$/.test(key))
+  return Object.keys(safeRow).some((key) =>
+    expensePrefixColumns.some((type) => key.startsWith(type) && /\d+$/.test(key))
   );
-};
+}
+
+// Alias retained for backwards compatibility where both names are used
+const isDetailedExportRow = isDetailedExportRowFormat;
 
 // Helper to parse numbers from Excel cells
 function parseNumber(val: any): number {
