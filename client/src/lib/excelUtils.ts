@@ -98,7 +98,50 @@ function getBankNameForSlot(row: any, slot: number): string {
       if (value) {
         return value;
       }
+      return;
     }
+
+    // Fallback: extract slot numbers from expense columns like "انتقالات5"
+    for (const type of typeColumns) {
+      const typeMatch = key.match(new RegExp(`${type}(\\d+)`));
+      if (typeMatch) {
+        const index = parseInt(typeMatch[1], 10);
+        if (!isNaN(index)) {
+          indices.add(index);
+        }
+        break;
+      }
+    }
+  });
+
+  return Array.from(indices).sort((a, b) => a - b);
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
+  }
+
+  return '';
+}
+
+// Detection helper for detailed export format
+function isDetailedExportRow(row: any): boolean {
+  const bankSlotIndices = getBankSlotIndices(row);
+  if (bankSlotIndices.length > 0) {
+    return true;
   }
 
   return '';
