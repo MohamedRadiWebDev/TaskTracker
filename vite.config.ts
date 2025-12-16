@@ -1,3 +1,6 @@
+// Silence outdated caniuse-lite data warnings during CI/production builds.
+process.env.BROWSERSLIST_IGNORE_OLD_DATA = "1";
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
