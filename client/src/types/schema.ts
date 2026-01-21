@@ -28,14 +28,14 @@ export const insertBankSchema = z.object({
 
 export type InsertBank = z.infer<typeof insertBankSchema>;
 
-// Expense Item Type - Updated with description field
+// Expense Item Type - مع حقل البيان
 export interface ExpenseItem {
   id: string;
   type: string;
   amount: number;
   banks: string[];
   description?: string; // حقل البيان الجديد
-  bankAllocations?: Record<string, number>; // Optional: specific amounts per bank
+  bankAllocations?: Record<string, number>;
 }
 
 export const expenseItemSchema = z.object({
@@ -43,7 +43,7 @@ export const expenseItemSchema = z.object({
   type: z.string(),
   amount: z.number(),
   banks: z.array(z.string()),
-  description: z.string().optional(), // حقل البيان في الـ schema
+  description: z.string().optional(), // حقل البيان
   bankAllocations: z.record(z.string(), z.number()).optional()
 });
 
