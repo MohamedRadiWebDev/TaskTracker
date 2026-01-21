@@ -298,7 +298,7 @@ export default function ExpenseManagement({
               </div>
 
               {/* القسم الثاني: كل العناصر جنب بعض */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-[2fr_auto_2fr] gap-4">
                 {/* حقل البيان */}
                 <div>
                   <Label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
@@ -315,15 +315,13 @@ export default function ExpenseManagement({
                 </div>
 
                 {/* أزرار التحديد */}
-                <div>
-                  <Label className="block text-sm font-medium text-foreground mb-2">
-                    إجراءات
-                  </Label>
+                <div className="flex flex-col justify-end">
                   <div className="flex flex-col gap-2">
                     <Button
                       type="button"
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
+                      className="border-2 border-primary/20 hover:border-primary hover:bg-primary/10 transition-all"
                       onClick={() => {
                         const container = bankListRefs.current[expense.id];
                         if (container) {
@@ -340,12 +338,13 @@ export default function ExpenseManagement({
                         });
                       }}
                     >
-                      تحديد الكل
+                      ✓ تحديد الكل
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
+                      className="border-2 border-destructive/20 hover:border-destructive hover:bg-destructive/10 text-destructive hover:text-destructive transition-all"
                       onClick={() => {
                         const container = bankListRefs.current[expense.id];
                         if (container) {
@@ -365,7 +364,7 @@ export default function ExpenseManagement({
                         });
                       }}
                     >
-                      مسح التحديد
+                      ✕ مسح التحديد
                     </Button>
                   </div>
                 </div>
