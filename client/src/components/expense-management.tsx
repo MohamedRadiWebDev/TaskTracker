@@ -21,7 +21,6 @@ import {
 import { useBanks } from "../hooks/use-missions";
 import type { ExpenseItem, Bank } from "../types/schema";
 
-// Define expense types locally
 const expenseTypes = {
   'transportation': 'مواصلات',
   'fees': 'رسوم',
@@ -51,26 +50,19 @@ const expenseTypeIcons = {
   'hospitality': Coffee
 };
 
-// Function to safely evaluate mathematical expressions
 function evaluateFormula(formula: string): number | null {
   try {
-    // Remove leading = or + signs
     let expression = formula.replace(/^[=+]/, '').trim();
-    
-    // Only allow safe mathematical operations and numbers
     const safeExpression = expression.replace(/[^0-9+\-*/().\s]/g, '');
     
-    // Prevent empty or invalid expressions
     if (!safeExpression || safeExpression.length === 0) {
       return null;
     }
     
-    // Use Function constructor for safe evaluation (better than eval)
     const result = new Function('return (' + safeExpression + ')')();
     
-    // Check if result is a valid number
     if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
-      return Math.round(result * 100) / 100; // Round to 2 decimal places
+      return Math.round(result * 100) / 100;
     }
     
     return null;
@@ -89,7 +81,6 @@ export default function ExpenseManagement({
   const [, setLocation] = useLocation();
   const { banks } = useBanks();
 
-  // Keep banks selected in the first expense at the top of the list
   const primarySelectedBanks = expenses[0]?.banks || [];
   const sortedBanks = useMemo(() => {
     const selectedSet = new Set(primarySelectedBanks);
@@ -102,11 +93,9 @@ export default function ExpenseManagement({
     });
   }, [banks, primarySelectedBanks]);
 
-  // Preserve scroll position for each bank list when selections reorder the list
   const bankListRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const pendingScrollPositions = useRef<Record<string, number>>({});
 
-  // Quick filters per expense to make bank selection easier
   const [bankSearchTerms, setBankSearchTerms] = useState<Record<string, string>>({});
 
   useLayoutEffect(() => {
@@ -119,7 +108,6 @@ export default function ExpenseManagement({
     pendingScrollPositions.current = {};
   }, [expenses, sortedBanks]);
 
-  // Track display values for formula inputs
   const [displayValues, setDisplayValues] = useState<Record<string, string>>({});
 
   return (
