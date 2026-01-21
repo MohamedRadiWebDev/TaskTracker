@@ -199,222 +199,231 @@ export default function ExpenseManagement({
               </Button>
             </div>
             
-            <div className="grid grid-cols-1 gap-4 mb-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="block text-sm font-medium text-foreground mb-2">
-                    نوع المصروف
-                  </Label>
-                  <Select 
-                    value={expense.type} 
-                    onValueChange={(value) => onUpdateExpense(expense.id, { type: value })}
-                  >
-                    <SelectTrigger data-testid={`select-type-${expense.id}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(expenseTypes).map(([key, value]) => (
-                        <SelectItem key={key} value={key}>
-                          {value}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label className="block text-sm font-medium text-foreground mb-2">
-                    المبلغ (جنيه)
-                  </Label>
-                  <Input
-                    type="text"
-                    value={displayValues[expense.id] !== undefined ? displayValues[expense.id] : (expense.amount || '')}
-                    onChange={(e) => {
-                      const inputValue = e.target.value;
-                      
-                      // Update display value immediately
-                      setDisplayValues(prev => ({
-                        ...prev,
-                        [expense.id]: inputValue
-                      }));
-                      
-                      // Check if input is a formula (starts with = or +)
-                      if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
-                        const calculatedValue = evaluateFormula(inputValue);
-                        if (calculatedValue !== null) {
-                          // Update the actual amount with calculated value
+            <div className="space-y-4 mb-4">
+              {/* القسم الأول: نوع المصروف، المبلغ، البنوك المحددة والبحث */}
+              <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="block text-sm font-medium text-foreground mb-2">
+                      نوع المصروف
+                    </Label>
+                    <Select 
+                      value={expense.type} 
+                      onValueChange={(value) => onUpdateExpense(expense.id, { type: value })}
+                    >
+                      <SelectTrigger data-testid={`select-type-${expense.id}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(expenseTypes).map(([key, value]) => (
+                          <SelectItem key={key} value={key}>
+                            {value}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label className="block text-sm font-medium text-foreground mb-2">
+                      المبلغ (جنيه)
+                    </Label>
+                    <Input
+                      type="text"
+                      value={displayValues[expense.id] !== undefined ? displayValues[expense.id] : (expense.amount || '')}
+                      onChange={(e) => {
+                        const inputValue = e.target.value;
+                        
+                        // Update display value immediately
+                        setDisplayValues(prev => ({
+                          ...prev,
+                          [expense.id]: inputValue
+                        }));
+                        
+                        // Check if input is a formula (starts with = or +)
+                        if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
+                          const calculatedValue = evaluateFormula(inputValue);
+                          if (calculatedValue !== null) {
+                            // Update the actual amount with calculated value
+                            onUpdateExpense(expense.id, { 
+                              amount: calculatedValue,
+                              bankAllocations: undefined
+                            });
+                          }
+                        } else {
+                          // Regular number input
+                          const numericValue = parseFloat(inputValue) || 0;
                           onUpdateExpense(expense.id, { 
-                            amount: calculatedValue,
+                            amount: numericValue,
                             bankAllocations: undefined
                           });
                         }
-                      } else {
-                        // Regular number input
-                        const numericValue = parseFloat(inputValue) || 0;
-                        onUpdateExpense(expense.id, { 
-                          amount: numericValue,
-                          bankAllocations: undefined
-                        });
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const inputValue = e.target.value;
-                      
-                      // If it was a formula and calculated successfully, show the result
-                      if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
-                        const calculatedValue = evaluateFormula(inputValue);
-                        if (calculatedValue !== null) {
-                          setDisplayValues(prev => ({
-                            ...prev,
-                            [expense.id]: calculatedValue.toString()
-                          }));
+                      }}
+                      onBlur={(e) => {
+                        const inputValue = e.target.value;
+                        
+                        // If it was a formula and calculated successfully, show the result
+                        if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
+                          const calculatedValue = evaluateFormula(inputValue);
+                          if (calculatedValue !== null) {
+                            setDisplayValues(prev => ({
+                              ...prev,
+                              [expense.id]: calculatedValue.toString()
+                            }));
+                          }
                         }
-                      }
+                      }}
+                      onFocus={(e) => {
+                        // Clear display value to show stored amount when focused
+                        setDisplayValues(prev => {
+                          const newValues = { ...prev };
+                          delete newValues[expense.id];
+                          return newValues;
+                        });
+                      }}
+                      placeholder="0.00 أو =2+2+2"
+                      data-testid={`input-amount-${expense.id}`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium text-foreground mb-2">
+                    البنوك المحددة
+                  </Label>
+                  <Input
+                    type="text"
+                    placeholder="ابحث عن بنك أو شركة"
+                    value={bankSearchTerms[expense.id] || ''}
+                    onChange={(e) => {
+                      setBankSearchTerms(prev => ({
+                        ...prev,
+                        [expense.id]: e.target.value
+                      }));
                     }}
-                    onFocus={(e) => {
-                      // Clear display value to show stored amount when focused
-                      setDisplayValues(prev => {
-                        const newValues = { ...prev };
-                        delete newValues[expense.id];
-                        return newValues;
-                      });
-                    }}
-                    placeholder="0.00 أو =2+2+2"
-                    data-testid={`input-amount-${expense.id}`}
                   />
                 </div>
               </div>
 
-              {/* حقل البيان الجديد */}
-              <div>
-                <Label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  بيان المصروف (اختياري)
-                </Label>
-                <Textarea
-                  value={expense.description || ''}
-                  onChange={(e) => onUpdateExpense(expense.id, { description: e.target.value })}
-                  placeholder="أدخل وصف أو تفاصيل عن المصروف..."
-                  className="resize-none"
-                  rows={2}
-                  data-testid={`input-description-${expense.id}`}
-                />
-              </div>
-
-              <div>
-                <Label className="block text-sm font-medium text-foreground mb-2">
-                  البنوك المحددة
-                </Label>
-                <Input
-                  type="text"
-                  placeholder="ابحث عن بنك أو شركة"
-                  value={bankSearchTerms[expense.id] || ''}
-                  onChange={(e) => {
-                    setBankSearchTerms(prev => ({
-                      ...prev,
-                      [expense.id]: e.target.value
-                    }));
-                  }}
-                  className="mb-3"
-                />
-                <div className="flex gap-2 mb-3">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      const container = bankListRefs.current[expense.id];
-                      if (container) {
-                        pendingScrollPositions.current[expense.id] = container.scrollTop;
-                      }
-
-                      const filteredBanks = sortedBanks
-                        .filter(bank => bank.name.toLowerCase().includes((bankSearchTerms[expense.id] || '').toLowerCase()));
-                      const currentBanks = new Set(expense.banks || []);
-                      filteredBanks.forEach(bank => currentBanks.add(bank.name));
-                      onUpdateExpense(expense.id, {
-                        banks: Array.from(currentBanks),
-                        bankAllocations: undefined
-                      });
-                    }}
-                  >
-                    تحديد الكل
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      const container = bankListRefs.current[expense.id];
-                      if (container) {
-                        pendingScrollPositions.current[expense.id] = container.scrollTop;
-                      }
-
-                      const filteredNames = new Set(
-                        sortedBanks
-                          .filter(bank => bank.name.toLowerCase().includes((bankSearchTerms[expense.id] || '').toLowerCase()))
-                          .map(bank => bank.name)
-                      );
-
-                      const remainingBanks = (expense.banks || []).filter(name => !filteredNames.has(name));
-                      onUpdateExpense(expense.id, {
-                        banks: remainingBanks,
-                        bankAllocations: undefined
-                      });
-                    }}
-                  >
-                    مسح التحديد
-                  </Button>
+              {/* القسم الثاني: بيان المصروف وقائمة البنوك */}
+              <div className="grid grid-cols-1 gap-4">
+                {/* حقل البيان */}
+                <div>
+                  <Label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    بيان المصروف (اختياري)
+                  </Label>
+                  <Textarea
+                    value={expense.description || ''}
+                    onChange={(e) => onUpdateExpense(expense.id, { description: e.target.value })}
+                    placeholder="أدخل وصف أو تفاصيل عن المصروف..."
+                    className="resize-none"
+                    rows={2}
+                    data-testid={`input-description-${expense.id}`}
+                  />
                 </div>
-                <div
-                  ref={(el) => { bankListRefs.current[expense.id] = el; }}
-                  className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3"
-                >
-                  {filteredBanks
-                    .map((bank) => {
-                    const isChecked = expense.banks ? expense.banks.includes(bank.name) : false;
-                    return (
-                      <div key={bank.id} className="flex items-center space-x-2 rtl:space-x-reverse">
-                        <Checkbox
-                          id={`bank-${expense.id}-${bank.id}`}
-                          checked={isChecked}
-                          onCheckedChange={(checked) => {
-                            const container = bankListRefs.current[expense.id];
-                            if (container) {
-                              pendingScrollPositions.current[expense.id] = container.scrollTop;
-                            }
 
-                            const currentBanks = expense.banks || [];
-                            const updatedBanks = checked
-                              ? [...currentBanks, bank.name]
-                              : currentBanks.filter(b => b !== bank.name);
-                            onUpdateExpense(expense.id, {
-                              banks: updatedBanks,
-                              bankAllocations: undefined
-                            });
-                          }}
-                          data-testid={`checkbox-bank-${expense.id}-${bank.id}`}
-                        />
-                        <Label 
-                          htmlFor={`bank-${expense.id}-${bank.id}`} 
-                          className="text-sm font-normal cursor-pointer"
-                        >
-                          {bank.name}
-                        </Label>
+                {/* قائمة البنوك */}
+                <div>
+                  <div className="flex gap-2 mb-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        const container = bankListRefs.current[expense.id];
+                        if (container) {
+                          pendingScrollPositions.current[expense.id] = container.scrollTop;
+                        }
+
+                        const filteredBanks = sortedBanks
+                          .filter(bank => bank.name.toLowerCase().includes((bankSearchTerms[expense.id] || '').toLowerCase()));
+                        const currentBanks = new Set(expense.banks || []);
+                        filteredBanks.forEach(bank => currentBanks.add(bank.name));
+                        onUpdateExpense(expense.id, {
+                          banks: Array.from(currentBanks),
+                          bankAllocations: undefined
+                        });
+                      }}
+                    >
+                      تحديد الكل
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const container = bankListRefs.current[expense.id];
+                        if (container) {
+                          pendingScrollPositions.current[expense.id] = container.scrollTop;
+                        }
+
+                        const filteredNames = new Set(
+                          sortedBanks
+                            .filter(bank => bank.name.toLowerCase().includes((bankSearchTerms[expense.id] || '').toLowerCase()))
+                            .map(bank => bank.name)
+                        );
+
+                        const remainingBanks = (expense.banks || []).filter(name => !filteredNames.has(name));
+                        onUpdateExpense(expense.id, {
+                          banks: remainingBanks,
+                          bankAllocations: undefined
+                        });
+                      }}
+                    >
+                      مسح التحديد
+                    </Button>
+                  </div>
+                  <div
+                    ref={(el) => { bankListRefs.current[expense.id] = el; }}
+                    className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3"
+                  >
+                    {filteredBanks
+                      .map((bank) => {
+                      const isChecked = expense.banks ? expense.banks.includes(bank.name) : false;
+                      return (
+                        <div key={bank.id} className="flex items-center space-x-2 rtl:space-x-reverse">
+                          <Checkbox
+                            id={`bank-${expense.id}-${bank.id}`}
+                            checked={isChecked}
+                            onCheckedChange={(checked) => {
+                              const container = bankListRefs.current[expense.id];
+                              if (container) {
+                                pendingScrollPositions.current[expense.id] = container.scrollTop;
+                              }
+
+                              const currentBanks = expense.banks || [];
+                              const updatedBanks = checked
+                                ? [...currentBanks, bank.name]
+                                : currentBanks.filter(b => b !== bank.name);
+                              onUpdateExpense(expense.id, {
+                                banks: updatedBanks,
+                                bankAllocations: undefined
+                              });
+                            }}
+                            data-testid={`checkbox-bank-${expense.id}-${bank.id}`}
+                          />
+                          <Label 
+                            htmlFor={`bank-${expense.id}-${bank.id}`} 
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {bank.name}
+                          </Label>
+                        </div>
+                      );
+                    })}
+                    {filteredBanks.length === 0 && (
+                      <div className="text-sm text-muted-foreground text-center py-2">
+                        لا توجد بنوك متاحة
                       </div>
-                    );
-                  })}
-                  {filteredBanks.length === 0 && (
-                    <div className="text-sm text-muted-foreground text-center py-2">
-                      لا توجد بنوك متاحة
+                    )}
+                  </div>
+                  {expense.banks && expense.banks.length > 0 && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {expense.banks.length} بنك محدد: {expense.banks.join('، ')}
                     </div>
                   )}
                 </div>
-                {expense.banks && expense.banks.length > 0 && (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {expense.banks.length} بنك محدد: {expense.banks.join('، ')}
-                  </div>
-                )}
               </div>
             </div>
           </Card>
