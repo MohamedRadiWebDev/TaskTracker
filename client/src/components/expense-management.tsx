@@ -200,94 +200,86 @@ export default function ExpenseManagement({
             </div>
             
             <div className="space-y-4 mb-4">
-              {/* القسم الأول: نوع المصروف، المبلغ، البنوك المحددة والبحث */}
-              <div className="grid grid-cols-1 gap-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="block text-sm font-medium text-foreground mb-2">
-                      نوع المصروف
-                    </Label>
-                    <Select 
-                      value={expense.type} 
-                      onValueChange={(value) => onUpdateExpense(expense.id, { type: value })}
-                    >
-                      <SelectTrigger data-testid={`select-type-${expense.id}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(expenseTypes).map(([key, value]) => (
-                          <SelectItem key={key} value={key}>
-                            {value}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <Label className="block text-sm font-medium text-foreground mb-2">
-                      المبلغ (جنيه)
-                    </Label>
-                    <Input
-                      type="text"
-                      value={displayValues[expense.id] !== undefined ? displayValues[expense.id] : (expense.amount || '')}
-                      onChange={(e) => {
-                        const inputValue = e.target.value;
-                        
-                        // Update display value immediately
-                        setDisplayValues(prev => ({
-                          ...prev,
-                          [expense.id]: inputValue
-                        }));
-                        
-                        // Check if input is a formula (starts with = or +)
-                        if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
-                          const calculatedValue = evaluateFormula(inputValue);
-                          if (calculatedValue !== null) {
-                            // Update the actual amount with calculated value
-                            onUpdateExpense(expense.id, { 
-                              amount: calculatedValue,
-                              bankAllocations: undefined
-                            });
-                          }
-                        } else {
-                          // Regular number input
-                          const numericValue = parseFloat(inputValue) || 0;
+              {/* القسم الأول: كل العناصر جنب بعض */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <Label className="block text-sm font-medium text-foreground mb-2">
+                    نوع المصروف
+                  </Label>
+                  <Select 
+                    value={expense.type} 
+                    onValueChange={(value) => onUpdateExpense(expense.id, { type: value })}
+                  >
+                    <SelectTrigger data-testid={`select-type-${expense.id}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(expenseTypes).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label className="block text-sm font-medium text-foreground mb-2">
+                    المبلغ (جنيه)
+                  </Label>
+                  <Input
+                    type="text"
+                    value={displayValues[expense.id] !== undefined ? displayValues[expense.id] : (expense.amount || '')}
+                    onChange={(e) => {
+                      const inputValue = e.target.value;
+                      
+                      setDisplayValues(prev => ({
+                        ...prev,
+                        [expense.id]: inputValue
+                      }));
+                      
+                      if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
+                        const calculatedValue = evaluateFormula(inputValue);
+                        if (calculatedValue !== null) {
                           onUpdateExpense(expense.id, { 
-                            amount: numericValue,
+                            amount: calculatedValue,
                             bankAllocations: undefined
                           });
                         }
-                      }}
-                      onBlur={(e) => {
-                        const inputValue = e.target.value;
-                        
-                        // If it was a formula and calculated successfully, show the result
-                        if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
-                          const calculatedValue = evaluateFormula(inputValue);
-                          if (calculatedValue !== null) {
-                            setDisplayValues(prev => ({
-                              ...prev,
-                              [expense.id]: calculatedValue.toString()
-                            }));
-                          }
-                        }
-                      }}
-                      onFocus={(e) => {
-                        // Clear display value to show stored amount when focused
-                        setDisplayValues(prev => {
-                          const newValues = { ...prev };
-                          delete newValues[expense.id];
-                          return newValues;
+                      } else {
+                        const numericValue = parseFloat(inputValue) || 0;
+                        onUpdateExpense(expense.id, { 
+                          amount: numericValue,
+                          bankAllocations: undefined
                         });
-                      }}
-                      placeholder="0.00 أو =2+2+2"
-                      data-testid={`input-amount-${expense.id}`}
-                    />
-                  </div>
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const inputValue = e.target.value;
+                      
+                      if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
+                        const calculatedValue = evaluateFormula(inputValue);
+                        if (calculatedValue !== null) {
+                          setDisplayValues(prev => ({
+                            ...prev,
+                            [expense.id]: calculatedValue.toString()
+                          }));
+                        }
+                      }
+                    }}
+                    onFocus={(e) => {
+                      setDisplayValues(prev => {
+                        const newValues = { ...prev };
+                        delete newValues[expense.id];
+                        return newValues;
+                      });
+                    }}
+                    placeholder="0.00"
+                    data-testid={`input-amount-${expense.id}`}
+                  />
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
                   <Label className="block text-sm font-medium text-foreground mb-2">
                     البنوك المحددة
                   </Label>
@@ -305,8 +297,8 @@ export default function ExpenseManagement({
                 </div>
               </div>
 
-              {/* القسم الثاني: بيان المصروف وقائمة البنوك */}
-              <div className="grid grid-cols-1 gap-4">
+              {/* القسم الثاني: كل العناصر جنب بعض */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* حقل البيان */}
                 <div>
                   <Label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
@@ -316,16 +308,18 @@ export default function ExpenseManagement({
                   <Textarea
                     value={expense.description || ''}
                     onChange={(e) => onUpdateExpense(expense.id, { description: e.target.value })}
-                    placeholder="أدخل وصف أو تفاصيل عن المصروف..."
-                    className="resize-none"
-                    rows={2}
+                    placeholder="أدخل وصف أو تفاصيل..."
+                    className="resize-none h-full min-h-[120px]"
                     data-testid={`input-description-${expense.id}`}
                   />
                 </div>
 
-                {/* قائمة البنوك */}
+                {/* أزرار التحديد */}
                 <div>
-                  <div className="flex gap-2 mb-3">
+                  <Label className="block text-sm font-medium text-foreground mb-2">
+                    إجراءات
+                  </Label>
+                  <div className="flex flex-col gap-2">
                     <Button
                       type="button"
                       variant="secondary"
@@ -374,9 +368,16 @@ export default function ExpenseManagement({
                       مسح التحديد
                     </Button>
                   </div>
+                </div>
+
+                {/* قائمة البنوك */}
+                <div>
+                  <Label className="block text-sm font-medium text-foreground mb-2">
+                    اختيار البنوك
+                  </Label>
                   <div
                     ref={(el) => { bankListRefs.current[expense.id] = el; }}
-                    className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded-md p-3"
+                    className="grid grid-cols-1 gap-2 max-h-[120px] overflow-y-auto border rounded-md p-3"
                   >
                     {filteredBanks
                       .map((bank) => {
@@ -420,7 +421,7 @@ export default function ExpenseManagement({
                   </div>
                   {expense.banks && expense.banks.length > 0 && (
                     <div className="mt-2 text-xs text-muted-foreground">
-                      {expense.banks.length} بنك محدد: {expense.banks.join('، ')}
+                      {expense.banks.length} بنك محدد
                     </div>
                   )}
                 </div>
