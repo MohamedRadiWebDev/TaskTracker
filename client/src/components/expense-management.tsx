@@ -6,6 +6,7 @@ import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Card } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
+import { Textarea } from "./ui/textarea";
 import { 
   Car, 
   Receipt, 
@@ -14,12 +15,13 @@ import {
   Coffee, 
   Plus, 
   Trash2,
-  Banknote
+  Banknote,
+  FileText
 } from "lucide-react";
 import { useBanks } from "../hooks/use-missions";
 import type { ExpenseItem, Bank } from "../types/schema";
 
-// Define expense types locally since we're removing the types file
+// Define expense types locally
 const expenseTypes = {
   'transportation': 'مواصلات',
   'fees': 'رسوم',
@@ -197,87 +199,105 @@ export default function ExpenseManagement({
               </Button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label className="block text-sm font-medium text-foreground mb-2">
-                  نوع المصروف
-                </Label>
-                <Select 
-                  value={expense.type} 
-                  onValueChange={(value) => onUpdateExpense(expense.id, { type: value })}
-                >
-                  <SelectTrigger data-testid={`select-type-${expense.id}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(expenseTypes).map(([key, value]) => (
-                      <SelectItem key={key} value={key}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label className="block text-sm font-medium text-foreground mb-2">
-                  المبلغ (جنيه)
-                </Label>
-                <Input
-                  type="text"
-                  value={displayValues[expense.id] !== undefined ? displayValues[expense.id] : (expense.amount || '')}
-                  onChange={(e) => {
-                    const inputValue = e.target.value;
-                    
-                    // Update display value immediately
-                    setDisplayValues(prev => ({
-                      ...prev,
-                      [expense.id]: inputValue
-                    }));
-                    
-                    // Check if input is a formula (starts with = or +)
-                    if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
-                      const calculatedValue = evaluateFormula(inputValue);
-                      if (calculatedValue !== null) {
-                        // Update the actual amount with calculated value
+            <div className="grid grid-cols-1 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="block text-sm font-medium text-foreground mb-2">
+                    نوع المصروف
+                  </Label>
+                  <Select 
+                    value={expense.type} 
+                    onValueChange={(value) => onUpdateExpense(expense.id, { type: value })}
+                  >
+                    <SelectTrigger data-testid={`select-type-${expense.id}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(expenseTypes).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label className="block text-sm font-medium text-foreground mb-2">
+                    المبلغ (جنيه)
+                  </Label>
+                  <Input
+                    type="text"
+                    value={displayValues[expense.id] !== undefined ? displayValues[expense.id] : (expense.amount || '')}
+                    onChange={(e) => {
+                      const inputValue = e.target.value;
+                      
+                      // Update display value immediately
+                      setDisplayValues(prev => ({
+                        ...prev,
+                        [expense.id]: inputValue
+                      }));
+                      
+                      // Check if input is a formula (starts with = or +)
+                      if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
+                        const calculatedValue = evaluateFormula(inputValue);
+                        if (calculatedValue !== null) {
+                          // Update the actual amount with calculated value
+                          onUpdateExpense(expense.id, { 
+                            amount: calculatedValue,
+                            bankAllocations: undefined
+                          });
+                        }
+                      } else {
+                        // Regular number input
+                        const numericValue = parseFloat(inputValue) || 0;
                         onUpdateExpense(expense.id, { 
-                          amount: calculatedValue,
+                          amount: numericValue,
                           bankAllocations: undefined
                         });
                       }
-                    } else {
-                      // Regular number input
-                      const numericValue = parseFloat(inputValue) || 0;
-                      onUpdateExpense(expense.id, { 
-                        amount: numericValue,
-                        bankAllocations: undefined
-                      });
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const inputValue = e.target.value;
-                    
-                    // If it was a formula and calculated successfully, show the result
-                    if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
-                      const calculatedValue = evaluateFormula(inputValue);
-                      if (calculatedValue !== null) {
-                        setDisplayValues(prev => ({
-                          ...prev,
-                          [expense.id]: calculatedValue.toString()
-                        }));
+                    }}
+                    onBlur={(e) => {
+                      const inputValue = e.target.value;
+                      
+                      // If it was a formula and calculated successfully, show the result
+                      if (inputValue.startsWith('=') || inputValue.startsWith('+')) {
+                        const calculatedValue = evaluateFormula(inputValue);
+                        if (calculatedValue !== null) {
+                          setDisplayValues(prev => ({
+                            ...prev,
+                            [expense.id]: calculatedValue.toString()
+                          }));
+                        }
                       }
-                    }
-                  }}
-                  onFocus={(e) => {
-                    // Clear display value to show stored amount when focused
-                    setDisplayValues(prev => {
-                      const newValues = { ...prev };
-                      delete newValues[expense.id];
-                      return newValues;
-                    });
-                  }}
-                  placeholder="0.00 أو =2+2+2"
-                  data-testid={`input-amount-${expense.id}`}
+                    }}
+                    onFocus={(e) => {
+                      // Clear display value to show stored amount when focused
+                      setDisplayValues(prev => {
+                        const newValues = { ...prev };
+                        delete newValues[expense.id];
+                        return newValues;
+                      });
+                    }}
+                    placeholder="0.00 أو =2+2+2"
+                    data-testid={`input-amount-${expense.id}`}
+                  />
+                </div>
+              </div>
+
+              {/* حقل البيان الجديد */}
+              <div>
+                <Label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  بيان المصروف (اختياري)
+                </Label>
+                <Textarea
+                  value={expense.description || ''}
+                  onChange={(e) => onUpdateExpense(expense.id, { description: e.target.value })}
+                  placeholder="أدخل وصف أو تفاصيل عن المصروف..."
+                  className="resize-none"
+                  rows={2}
+                  data-testid={`input-description-${expense.id}`}
                 />
               </div>
 
@@ -370,7 +390,7 @@ export default function ExpenseManagement({
                               : currentBanks.filter(b => b !== bank.name);
                             onUpdateExpense(expense.id, {
                               banks: updatedBanks,
-                              bankAllocations: undefined // Clear custom allocations when banks change
+                              bankAllocations: undefined
                             });
                           }}
                           data-testid={`checkbox-bank-${expense.id}-${bank.id}`}
