@@ -6,6 +6,7 @@ import PeriodReport from "./pages/period-report";
 import TaskSearch from "./pages/task-search";
 import ReceiptDistributionPage from "./pages/receipt-distribution";
 import NotFound from "./pages/not-found";
+import GlobalBlocker from "./components/GlobalBlocker";
 
 function Router() {
   return (
@@ -21,10 +22,12 @@ function Router() {
 
 function App() {
   return (
-    <TooltipProvider>
-      <Toaster />
-      <Router />
-    </TooltipProvider>
+    <GlobalBlocker>
+      <TooltipProvider>
+        <Toaster />
+        <Router />
+      </TooltipProvider>
+    </GlobalBlocker>
   );
 }
 
